@@ -56,7 +56,7 @@ async function getSheetData(sheetName, range, raw = false) {
     }
 }
 
-// --- MIDDLEWARE Y RUTA RAÍZ (PARA EL "GUARDIA" DE EASYPANEL) ---
+// --- MIDDLEWARE Y RUTA RAÍZ (PARA EL VIGILANTE DE EASYPANEL) ---
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
