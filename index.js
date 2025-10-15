@@ -56,14 +56,20 @@ async function getSheetData(sheetName, range, raw = false) {
     }
 }
 
-// --- MIDDLEWARE (Permite que la calculadora se conecte desde cualquier web) ---
+// --- MIDDLEWARE Y RUTA RAÍZ (PARA EL "GUARDIA" DE EASYPANEL) ---
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
     next();
 });
 
-// --- ÚNICO ENDPOINT: SERVICIO DE CONVERSIÓN ---
+// Ruta raíz para que el chequeo de salud de EasyPanel funcione
+app.get('/', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'API de Miguelacho en línea' });
+});
+
+
+// --- ENDPOINT DE LA CALCULADORA ---
 app.get('/convertir', async (req, res) => {
     const { cantidad, origen, destino } = req.query;
     const monto = parseFloat(cantidad);
