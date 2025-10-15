@@ -4,17 +4,18 @@ const app = express();
 
 // --- CONFIGURACIÓN DE ENTORNO PARA MIGUELACHO ---
 const PORT = process.env.PORT || 8080;
+const CREDENTIALS_PATH = '/workspace/credentials.json'; // Ruta donde buscaremos el archivo
 
 // --- Configuración de la Hoja de TASAS ---
 const SPREADSHEET_ID = '1jv-wydSjH84MLUtj-zRvHsxUlpEiqe5AlkTkr6K2248';
 const TASAS_SHEET_NAME = 'Mercado';
 const TASAS_SHEET_RANGE = 'A1:M1000';
 
-// --- Configuración de la Hoja de GANANCIAS (Actualizado a tu estructura) ---
+// --- Configuración de la Hoja de GANANCIAS ---
 const GANANCIAS_SHEET_NAME = 'miguelacho';
-const GANANCIAS_SHEET_RANGE = 'B2:L12'; // Rango exacto que me indicaste
+const GANANCIAS_SHEET_RANGE = 'B1:L12'; // Usamos B1 para capturar los encabezados de columna
 
-// Variable global para almacenar la matriz de ganancias como una tabla (array de arrays)
+// Variable global para almacenar la matriz
 let MATRIZ_DE_GANANCIAS = [];
 
 // --- FUNCIONES DE UTILIDAD ---
@@ -36,11 +37,9 @@ function transformTasasToObjects(data) {
 
 // --- FUNCIÓN PRINCIPAL DE GOOGLE SHEETS ---
 async function getSheetData(sheetName, range, raw = false) {
+    // --- CAMBIO CLAVE: Volvemos al método de leer el archivo ---
     const auth = new google.auth.GoogleAuth({
-        credentials: {
-            client_email: process.env.GOOGLE_CLIENT_EMAIL,
-            private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        },
+        keyFile: CREDENTIALS_PATH, // Le decimos que busque el archivo físico
         scopes: 'https://www.googleapis.com/auth/spreadsheets.readonly',
     });
 
@@ -52,7 +51,6 @@ async function getSheetData(sheetName, range, raw = false) {
             range: `${sheetName}!${range}`,
         });
         
-        // Si raw es true, devolvemos la tabla directamente. Si no, la transformamos.
         return raw ? response.data.values : transformTasasToObjects(response.data.values);
 
     } catch (err) {
@@ -78,11 +76,8 @@ app.get('/', (req, res) => {
 app.get('/tasas', async (req, res) => {
     try {
         const data = await getSheetData(TASAS_SHEET_NAME, TASAS_SHEET_RANGE);
-        if (!Array.isArray(data) || data.length === 0) {
-            return res.status(404).json({ error: "No se encontraron datos de tasas." });
-        }
-        const latestRow = data[data.length - 1];
-        res.json([latestRow]);
+        if (!data || data.length === 0) { return res.status(404).json({ error: "No se encontraron datos de tasas." }); }
+        res.json([data[data.length - 1]]);
     } catch (error) {
         res.status(500).json({ error: 'Error al obtener las tasas', detalle: error.message });
     }
@@ -96,66 +91,43 @@ app.get('/ganancias', (req, res) => {
     }
 });
 
-// --- SERVICIO DE CONVERSIÓN (LÓGICA ADAPTADA A LA MATRIZ) ---
+// --- SERVICIO DE CONVERSIÓN ---
 app.get('/convertir', async (req, res) => {
     const { cantidad, origen, destino } = req.query;
-
     const monto = parseFloat(cantidad);
-    const O = origen ? origen.toUpperCase() : null; // Ej: USD
-    const D = destino ? destino.toUpperCase() : null; // Ej: COP
+    const O = origen ? origen.toUpperCase() : null;
+    const D = destino ? destino.toUpperCase() : null;
 
-    if (!monto || !O || !D) {
-        return res.status(400).json({ error: "Parámetros faltantes o inválidos." });
-    }
-    
-    if (MATRIZ_DE_GANANCIAS.length === 0) {
-        return res.status(503).json({ error: "El servicio no está listo, la matriz de ganancias no ha sido cargada." });
-    }
+    if (!monto || !O || !D) { return res.status(400).json({ error: "Parámetros faltantes o inválidos." }); }
+    if (MATRIZ_DE_GANANCIAS.length === 0) { return res.status(503).json({ error: "Servicio no listo, matriz de ganancias no cargada." }); }
 
     try {
-        // --- BÚSQUEDA DEL FACTOR DE GANANCIA EN LA MATRIZ ---
-        const headersColumnas = MATRIZ_DE_GANANCIAS[0]; // Fila 2 de la hoja
+        const headersColumnas = MATRIZ_DE_GANANCIAS[0];
         const originIndex = headersColumnas.indexOf(O);
-
-        if (originIndex === -1) {
-            return res.status(404).json({ error: `Moneda de origen '${O}' no encontrada en los encabezados (fila 2) de la matriz de ganancias.` });
-        }
+        if (originIndex === -1) { return res.status(404).json({ error: `Moneda de origen '${O}' no encontrada en la matriz de ganancias.` }); }
 
         let destinationRow = null;
-        // Buscamos la fila de destino recorriendo la primera columna (columna B de la hoja)
-        for (let i = 0; i < MATRIZ_DE_GANANCIAS.length; i++) {
+        for (let i = 1; i < MATRIZ_DE_GANANCIAS.length; i++) {
             if (MATRIZ_DE_GANANCIAS[i][0] === D) {
                 destinationRow = MATRIZ_DE_GANANCIAS[i];
                 break;
             }
         }
-
-        if (!destinationRow) {
-            return res.status(404).json({ error: `Moneda de destino '${D}' no encontrada en la columna B de la matriz de ganancias.` });
-        }
+        if (!destinationRow) { return res.status(404).json({ error: `Moneda de destino '${D}' no encontrada en la matriz de ganancias.` }); }
         
         const Factor_F = parseFactor(destinationRow[originIndex]);
-        // --- FIN DE LA BÚSQUEDA ---
 
         const tasasData = await getSheetData(TASAS_SHEET_NAME, TASAS_SHEET_RANGE);
-        if (!tasasData || tasasData.length === 0) {
-            return res.status(503).json({ error: "No se pudieron obtener datos de tasas dinámicas." });
-        }
+        if (!tasasData || tasasData.length === 0) { return res.status(503).json({ error: "No se pudieron obtener datos de tasas." }); }
         const latestRow = tasasData[tasasData.length - 1];
 
         const T_O_str = latestRow[`${O}_O`];
         const T_D_str = latestRow[`${D}_D`];
-
-        if (!T_O_str || !T_D_str) {
-            return res.status(404).json({ error: `Tasa no encontrada en la hoja 'Mercado'.` });
-        }
+        if (!T_O_str || !T_D_str) { return res.status(404).json({ error: `Tasa no encontrada en la hoja 'Mercado'.` }); }
 
         const T_O = parseFloat(T_O_str.replace(',', '.')) || 0;
         const T_D = parseFloat(T_D_str.replace(',', '.')) || 0;
-
-        if (T_O === 0 || T_D === 0) {
-            return res.status(404).json({ error: "El valor de una de las tasas es cero o inválido." });
-        }
+        if (T_O === 0 || T_D === 0) { return res.status(404).json({ error: "El valor de una de las tasas es cero." }); }
 
         const montoConvertido = monto * ((T_D / T_O) * Factor_F);
 
@@ -169,9 +141,7 @@ app.get('/convertir', async (req, res) => {
                 timestamp_actual: latestRow.FECHA || new Date().toISOString()
             }
         });
-
     } catch (error) {
-        console.error('Error en /convertir: ', error.message);
         res.status(500).json({ error: 'Error interno del servidor al procesar la conversión.', detalle: error.message });
     }
 });
@@ -180,7 +150,6 @@ app.get('/convertir', async (req, res) => {
 async function startServer() {
     try {
         console.log('Cargando matriz de ganancias desde Google Sheets (hoja: miguelacho)...');
-        // Cargamos los datos en formato raw (tabla)
         MATRIZ_DE_GANANCIAS = await getSheetData(GANANCIAS_SHEET_NAME, GANANCIAS_SHEET_RANGE, true);
         if (MATRIZ_DE_GANANCIAS && MATRIZ_DE_GANANCIAS.length > 0) {
             console.log('¡Matriz de ganancias cargada exitosamente!');
@@ -188,7 +157,7 @@ async function startServer() {
             console.error('ALERTA: La matriz de ganancias no se pudo cargar o está vacía.');
         }
     } catch (error) {
-        console.error('ERROR CRÍTICO: No se pudo cargar la matriz de ganancias al iniciar.', error);
+        console.error('ERROR CRÍTICO: No se pudo cargar la matriz de ganancias.', error);
     }
     
     app.listen(PORT, () => {
