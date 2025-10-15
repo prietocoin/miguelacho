@@ -37,9 +37,8 @@ function transformTasasToObjects(data) {
 
 // --- FUNCIÓN PRINCIPAL DE GOOGLE SHEETS ---
 async function getSheetData(sheetName, range, raw = false) {
-    // --- CAMBIO CLAVE: Volvemos al método de leer el archivo ---
     const auth = new google.auth.GoogleAuth({
-        keyFile: CREDENTIALS_PATH, // Le decimos que busque el archivo físico
+        keyFile: CREDENTIALS_PATH,
         scopes: 'https://www.googleapis.com/auth/spreadsheets.readonly',
     });
 
@@ -59,17 +58,18 @@ async function getSheetData(sheetName, range, raw = false) {
     }
 }
 
-// --- MIDDLEWARE Y RUTA RAÍZ ---
+// --- MIDDLEWARE Y RUTA RAÍZ (SIMPLIFICADA PARA HEALTH CHECK) ---
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
     next();
 });
 
+// Ruta raíz para el chequeo de salud de EasyPanel
 app.get('/', (req, res) => {
-    res.setHeader('Content-Type', 'text/html');
-    res.send('<h1>API para Calculadora Miguelacho está en línea</h1>');
+    res.status(200).json({ status: 'ok', message: 'API de Miguelacho en línea' });
 });
+
 
 // --- RUTAS DE LA API ---
 
@@ -109,60 +109,4 @@ app.get('/convertir', async (req, res) => {
         let destinationRow = null;
         for (let i = 1; i < MATRIZ_DE_GANANCIAS.length; i++) {
             if (MATRIZ_DE_GANANCIAS[i][0] === D) {
-                destinationRow = MATRIZ_DE_GANANCIAS[i];
-                break;
-            }
-        }
-        if (!destinationRow) { return res.status(404).json({ error: `Moneda de destino '${D}' no encontrada en la matriz de ganancias.` }); }
-        
-        const Factor_F = parseFactor(destinationRow[originIndex]);
-
-        const tasasData = await getSheetData(TASAS_SHEET_NAME, TASAS_SHEET_RANGE);
-        if (!tasasData || tasasData.length === 0) { return res.status(503).json({ error: "No se pudieron obtener datos de tasas." }); }
-        const latestRow = tasasData[tasasData.length - 1];
-
-        const T_O_str = latestRow[`${O}_O`];
-        const T_D_str = latestRow[`${D}_D`];
-        if (!T_O_str || !T_D_str) { return res.status(404).json({ error: `Tasa no encontrada en la hoja 'Mercado'.` }); }
-
-        const T_O = parseFloat(T_O_str.replace(',', '.')) || 0;
-        const T_D = parseFloat(T_D_str.replace(',', '.')) || 0;
-        if (T_O === 0 || T_D === 0) { return res.status(404).json({ error: "El valor de una de las tasas es cero." }); }
-
-        const montoConvertido = monto * ((T_D / T_O) * Factor_F);
-
-        res.json({
-            status: "success",
-            conversion_solicitada: `${monto} ${O} a ${D}`,
-            monto_convertido: parseFloat(montoConvertido.toFixed(4)),
-            detalle: {
-                factor_ganancia: Factor_F,
-                id_tasa_actual: latestRow.IDTAS || 'N/A',
-                timestamp_actual: latestRow.FECHA || new Date().toISOString()
-            }
-        });
-    } catch (error) {
-        res.status(500).json({ error: 'Error interno del servidor al procesar la conversión.', detalle: error.message });
-    }
-});
-
-// --- INICIO DEL SERVIDOR ---
-async function startServer() {
-    try {
-        console.log('Cargando matriz de ganancias desde Google Sheets (hoja: miguelacho)...');
-        MATRIZ_DE_GANANCIAS = await getSheetData(GANANCIAS_SHEET_NAME, GANANCIAS_SHEET_RANGE, true);
-        if (MATRIZ_DE_GANANCIAS && MATRIZ_DE_GANANCIAS.length > 0) {
-            console.log('¡Matriz de ganancias cargada exitosamente!');
-        } else {
-            console.error('ALERTA: La matriz de ganancias no se pudo cargar o está vacía.');
-        }
-    } catch (error) {
-        console.error('ERROR CRÍTICO: No se pudo cargar la matriz de ganancias.', error);
-    }
-    
-    app.listen(PORT, () => {
-        console.log(`Servidor para Miguelacho API escuchando en el puerto: ${PORT}`);
-    });
-}
-
-startServer();
+                destinationRow = MATRIZ_DE_GANAN
