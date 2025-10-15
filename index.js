@@ -127,4 +127,42 @@ app.get('/convertir', async (req, res) => {
 
         const T_O = parseFloat(T_O_str.replace(',', '.')) || 0;
         const T_D = parseFloat(T_D_str.replace(',', '.')) || 0;
-        if (T_O === 0 || T_D === 0) { return
+        if (T_O === 0 || T_D === 0) { return res.status(404).json({ error: "El valor de una de las tasas es cero." }); }
+
+        const montoConvertido = monto * ((T_D / T_O) * Factor_F);
+
+        res.json({
+            status: "success",
+            conversion_solicitada: `${monto} ${O} a ${D}`,
+            monto_convertido: parseFloat(montoConvertido.toFixed(4)),
+            detalle: {
+                factor_ganancia: Factor_F,
+                id_tasa_actual: latestRow.IDTAS || 'N/A',
+                timestamp_actual: latestRow.FECHA || new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Error interno del servidor al procesar la conversión.', detalle: error.message });
+    }
+});
+
+// --- INICIO DEL SERVIDOR ---
+async function startServer() {
+    try {
+        console.log('Cargando matriz de ganancias desde Google Sheets (hoja: miguelacho)...');
+        MATRIZ_DE_GANANCIAS = await getSheetData(GANANCIAS_SHEET_NAME, GANANCIAS_SHEET_RANGE, true);
+        if (MATRIZ_DE_GANANCIAS && MATRIZ_DE_GANANCIAS.length > 0) {
+            console.log('¡Matriz de ganancias cargada exitosamente!');
+        } else {
+            console.error('ALERTA: La matriz de ganancias no se pudo cargar o está vacía.');
+        }
+    } catch (error) {
+        console.error('ERROR CRÍTICO: No se pudo cargar la matriz de ganancias.', error);
+    }
+    
+    app.listen(PORT, () => {
+        console.log(`Servidor para Miguelacho API escuchando en el puerto: ${PORT}`);
+    });
+}
+
+startServer();
