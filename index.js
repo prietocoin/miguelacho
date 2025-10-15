@@ -4,7 +4,7 @@ const app = express();
 
 // --- CONFIGURACIÓN DE ENTORNO PARA MIGUELACHO ---
 const PORT = process.env.PORT || 8080;
-const CREDENTIALS_PATH = '/workspace/credentials.json'; // Ruta donde buscaremos el archivo
+const CREDENTIALS_PATH = '/workspace/credentials.json';
 
 // --- Configuración de la Hoja de TASAS ---
 const SPREADSHEET_ID = '1jv-wydSjH84MLUtj-zRvHsxUlpEiqe5AlkTkr6K2248';
@@ -13,7 +13,7 @@ const TASAS_SHEET_RANGE = 'A1:M1000';
 
 // --- Configuración de la Hoja de GANANCIAS ---
 const GANANCIAS_SHEET_NAME = 'miguelacho';
-const GANANCIAS_SHEET_RANGE = 'B1:L12'; // Usamos B1 para capturar los encabezados de columna
+const GANANCIAS_SHEET_RANGE = 'B1:L12';
 
 // Variable global para almacenar la matriz
 let MATRIZ_DE_GANANCIAS = [];
@@ -58,14 +58,14 @@ async function getSheetData(sheetName, range, raw = false) {
     }
 }
 
-// --- MIDDLEWARE Y RUTA RAÍZ (SIMPLIFICADA PARA HEALTH CHECK) ---
+// --- MIDDLEWARE Y RUTA RAÍZ (SIMPLIFICADA PARA EL "GUARDIA") ---
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
     next();
 });
 
-// Ruta raíz para el chequeo de salud de EasyPanel
+// Ruta raíz para que el "guardia" de EasyPanel se quede tranquilo
 app.get('/', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'API de Miguelacho en línea' });
 });
