@@ -109,4 +109,22 @@ app.get('/convertir', async (req, res) => {
         let destinationRow = null;
         for (let i = 1; i < MATRIZ_DE_GANANCIAS.length; i++) {
             if (MATRIZ_DE_GANANCIAS[i][0] === D) {
-                destinationRow = MATRIZ_DE_GANAN
+                destinationRow = MATRIZ_DE_GANANCIAS[i];
+                break;
+            }
+        }
+        if (!destinationRow) { return res.status(404).json({ error: `Moneda de destino '${D}' no encontrada en la matriz de ganancias.` }); }
+        
+        const Factor_F = parseFactor(destinationRow[originIndex]);
+
+        const tasasData = await getSheetData(TASAS_SHEET_NAME, TASAS_SHEET_RANGE);
+        if (!tasasData || tasasData.length === 0) { return res.status(503).json({ error: "No se pudieron obtener datos de tasas." }); }
+        const latestRow = tasasData[tasasData.length - 1];
+
+        const T_O_str = latestRow[`${O}_O`];
+        const T_D_str = latestRow[`${D}_D`];
+        if (!T_O_str || !T_D_str) { return res.status(404).json({ error: `Tasa no encontrada en la hoja 'Mercado'.` }); }
+
+        const T_O = parseFloat(T_O_str.replace(',', '.')) || 0;
+        const T_D = parseFloat(T_D_str.replace(',', '.')) || 0;
+        if (T_O === 0 || T_D === 0) { return
