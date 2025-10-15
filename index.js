@@ -2,20 +2,18 @@ const express = require('express');
 const { google } = require('googleapis');
 const app = express();
 
-// --- CONFIGURACIÓN DE ENTORNO PARA MIGUELACHO ---
+// --- CONFIGURACIÓN DE ENTORNO ---
 const PORT = process.env.PORT || 8080;
 const CREDENTIALS_PATH = '/workspace/credentials.json';
 
-// --- Configuración de la Hoja de TASAS ---
+// --- Configuración de Google Sheets ---
 const SPREADSHEET_ID = '1jv-wydSjH84MLUtj-zRvHsxUlpEiqe5AlkTkr6K2248';
 const TASAS_SHEET_NAME = 'Mercado';
 const TASAS_SHEET_RANGE = 'A1:M1000';
-
-// --- Configuración de la Hoja de GANANCIAS ---
 const GANANCIAS_SHEET_NAME = 'miguelacho';
 const GANANCIAS_SHEET_RANGE = 'B1:L12';
 
-// Variable global para almacenar la matriz
+// Variable global para almacenar la matriz de ganancias
 let MATRIZ_DE_GANANCIAS = [];
 
 // --- FUNCIONES DE UTILIDAD ---
@@ -58,40 +56,14 @@ async function getSheetData(sheetName, range, raw = false) {
     }
 }
 
-// --- MIDDLEWARE Y RUTA RAÍZ (SIMPLIFICADA PARA EL "GUARDIA") ---
+// --- MIDDLEWARE (Permite que la calculadora se conecte desde cualquier web) ---
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
     next();
 });
 
-// Ruta raíz para que el "guardia" de EasyPanel se quede tranquilo
-app.get('/', (req, res) => {
-    res.status(200).json({ status: 'ok', message: 'API de Miguelacho en línea' });
-});
-
-
-// --- RUTAS DE LA API ---
-
-app.get('/tasas', async (req, res) => {
-    try {
-        const data = await getSheetData(TASAS_SHEET_NAME, TASAS_SHEET_RANGE);
-        if (!data || data.length === 0) { return res.status(404).json({ error: "No se encontraron datos de tasas." }); }
-        res.json([data[data.length - 1]]);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al obtener las tasas', detalle: error.message });
-    }
-});
-
-app.get('/ganancias', (req, res) => {
-    if (MATRIZ_DE_GANANCIAS.length > 0) {
-        res.json(MATRIZ_DE_GANANCIAS);
-    } else {
-        res.status(404).json({ error: "La matriz de ganancias no ha sido cargada." });
-    }
-});
-
-// --- SERVICIO DE CONVERSIÓN ---
+// --- ÚNICO ENDPOINT: SERVICIO DE CONVERSIÓN ---
 app.get('/convertir', async (req, res) => {
     const { cantidad, origen, destino } = req.query;
     const monto = parseFloat(cantidad);
