@@ -13,7 +13,7 @@ const TASAS_SHEET_RANGE = 'A1:M1000';
 const GANANCIAS_SHEET_NAME = 'miguelacho';
 const GANANCIAS_SHEET_RANGE = 'B1:L12';
 
-// Variable global para almacenar la matriz de ganancias
+// Variable global para almacenar la matriz
 let MATRIZ_DE_GANANCIAS = [];
 
 // --- FUNCIONES DE UTILIDAD ---
@@ -56,15 +56,17 @@ async function getSheetData(sheetName, range, raw = false) {
     }
 }
 
-// --- MIDDLEWARE Y RUTA RAÍZ (PARA EL VIGILANTE DE EASYPANEL) ---
+// --- MIDDLEWARE Y RUTA RAÍZ (CON DIAGNÓSTICO) ---
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
     next();
 });
 
-// Ruta raíz para que el chequeo de salud de EasyPanel funcione
+// Ruta raíz para el chequeo de salud de EasyPanel
 app.get('/', (req, res) => {
+    // ¡ESTA ES LA LÍNEA NUEVA!
+    console.log(`[${new Date().toISOString()}] ¡Chequeo de salud recibido! Respondiendo con 'ok'.`);
     res.status(200).json({ status: 'ok', message: 'API de Miguelacho en línea' });
 });
 
