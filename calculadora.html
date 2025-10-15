@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Divisas NOCTUS</title>
+    <style>
+        /* ESTILOS GLOBALES */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 10px; 
+            
+            /* AJUSTE CLAVE PARA CENTRADO VERTICAL */
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Centra horizontalmente */
+            justify-content: center; /* <--- CENTRA VERTICALMENTE */
+            min-height: 100vh;
+        }
+        /* ENCABEZADO Y MARCA */
+        .header-branding {
+            text-align: center;
+            margin-bottom: 10px; 
+        }
+        .header-branding img {
+            max-width: 65px; 
+            height: auto;
+            margin-bottom: 5px; 
+            border-radius: 50%;
+        }
+        .header-branding .brand-name {
+            font-size: 1.7em; 
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 2px; 
+        }
+        .header-branding .tagline {
+            font-size: 1em; 
+            color: #555;
+            margin-bottom: 2px;
+        }
+        .header-branding .version-info {
+            font-size: 0.8em; 
+            color: #777;
+        }
+        /* CONTENEDOR PRINCIPAL - ALTURA Y ANCHO */
+        .container {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 350px; 
+            box-sizing: border-box;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+            font-size: 1.4em; 
+            margin-bottom: 10px;
+        }
+        /* CAMPOS DE ENTRADA */
+        label {
+            display: block;
+            margin-bottom: 3px; 
+            color: #555;
+            font-size: 0.85em;
+        }
+        input[type="number"], select {
+            width: calc(100% - 20px);
+            padding: 7px; 
+            margin-bottom: 10px; 
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        /* RESULTADO E INFO */
+        .result {
+            margin-top: 10px; 
+            padding: 10px; 
+            background-color: #e9ecef;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 1em;
+            color: #333;
+        }
+        .loading { display: none; }
+        .error {
+            text-align: center;
+            margin-top: 5px;
+            color: #dc3545;
+        }
+        .timestamp-info {
+            font-size: 0.7em; 
+            color: #777;
+            text-align: center;
+            margin-top: 5px;
+            line-height: 1.2;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-branding">
+        <img src="https://raw.githubusercontent.com/prietocoin/noctus/main/buho.jpeg" alt="Logo Búho FUNDABLOCK"> 
+        <div class="brand-name">FUNDABLOCK</div>
+        <div class="tagline">NOCTUS</div>
+    </div>
+
+    <div class="container">
+        <h1>Calculadora de Divisas</h1>
+
+        <label for="amount">Cantidad a Convertir:</label>
+        <input type="number" id="amount" value="100" oninput="convertCurrency()">
+
+        <label for="originCurrency">De:</label>
+        <select id="originCurrency" onchange="convertCurrency()"></select>
+
+        <label for="destinationCurrency">A:</label>
+        <select id="destinationCurrency" onchange="convertCurrency()"></select>
+
+        <div class="result" id="result">Esperando datos...</div>
+        <div class="error" id="error"></div>
+        <div class="loading" id="loading">Cargando...</div>
+        <div class="timestamp-info" id="timestampInfo"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://noctus.jairokov.com'; 
+
+        const loadingDiv = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const resultDiv = document.getElementById('result');
+        const timestampInfoDiv = document.getElementById('timestampInfo');
+
+        const amountInput = document.getElementById('amount');
+        const originSelect = document.getElementById('originCurrency');
+        const destinationSelect = document.getElementById('destinationCurrency');
+
+        // Mapeo de códigos ISO a nombres de país/moneda
+        const CURRENCY_NAMES = {
+            'USD': 'Dólar Estadounidense (USD)',
+            'EUR': 'Euro (EUR)',
+            'VES': 'Bolívar Soberano (VES)',
+            'COP': 'Peso Colombiano (COP)',
+            'PEN': 'Sol Peruano (PEN)',
+            'CLP': 'Peso Chileno (CLP)',
+            'ARS': 'Peso Argentino (ARS)',
+            'BRL': 'Real Brasileño (BRL)',
+            'PYG': 'Guaraní Paraguayo (PYG)',
+            'MXN': 'Peso Mexicano (MXN)',
+            'DOP': 'Peso Dominicano (DOP)',
+            'BOB': 'Boliviano (BOB)',
+            'CRC': 'Colón Costarricense (CRC)',
+            'UYU': 'Peso Uruguayo (UYU)',
+            'ECU': 'Dólar Ecuatoriano (ECU)',
+            'PAN': 'Dólar Panameño (PAN)',
+            'CAD': 'Dólar Canadiense (CAD)',
+        };
+
+        // Formateador para números
+        const formatter = new Intl.NumberFormat('es-ES', {
+            style: 'decimal', 
+            minimumFractionDigits: 2
+        });
+        
+        function formatTimestamp(unixTimestamp) {
+            const timePart = parseInt(unixTimestamp);
+            const isMilliseconds = timePart > 1000000000000;
+            const ms = isMilliseconds ? timePart : timePart * 1000;
+            
+            const date = new Date(ms); 
+            if (isNaN(date.getTime())) return 'Fecha Desconocida';
+
+            return date.toLocaleString('es-ES', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+
+        function showLoading() {
+            loadingDiv.style.display = 'block';
+            errorDiv.textContent = '';
+            resultDiv.textContent = 'Calculando...';
+            timestampInfoDiv.textContent = '';
+        }
+
+        function hideLoading() {
+            loadingDiv.style.display = 'none';
+        }
+
+        function populateDropdown(selectElement, currencies) {
+            selectElement.innerHTML = ''; 
+            currencies.forEach(currency => {
+                // IGNORAR/ELIMINAR PYUSD
+                if (currency === 'PYUSD') return;
+                
+                const option = document.createElement('option');
+                option.value = currency;
+                
+                const displayName = CURRENCY_NAMES[currency] || currency;
+                option.textContent = displayName;
+                
+                selectElement.appendChild(option);
+            });
+        }
+
+        async function loadCurrencies() {
+            showLoading();
+            try {
+                const response = await fetch(`${API_BASE_URL}/tasas`);
+                const dataArray = await response.json(); 
+
+                if (!Array.isArray(dataArray) || dataArray.length === 0) {
+                    throw new Error("API de tasas devolvió data no válida.");
+                }
+                
+                const latestRow = dataArray[0];
+
+                const currencies = Object.keys(latestRow)
+                                         .filter(key => key.endsWith('_O'))
+                                         .map(key => key.slice(0, -2));
+
+                if (currencies.length === 0) {
+                    throw new Error("No se encontraron códigos de divisa válidos en la respuesta.");
+                }
+
+                populateDropdown(originSelect, currencies);
+                populateDropdown(destinationSelect, currencies);
+
+                originSelect.value = 'USD'; 
+                destinationSelect.value = 'COP'; 
+
+                await convertCurrency(); 
+
+            } catch (error) {
+                console.error("Error al cargar divisas:", error);
+                errorDiv.textContent = `Error al cargar divisas: ${error.message}.`;
+                resultDiv.textContent = 'Fallo al iniciar.';
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function convertCurrency() {
+            const amount = amountInput.value;
+            const origin = originSelect.value;
+            const destination = destinationSelect.value;
+
+            if (!amount || amount <= 0) {
+                errorDiv.textContent = "Ingrese una cantidad válida.";
+                resultDiv.textContent = '';
+                return;
+            }
+
+            showLoading();
+            try {
+                const endpoint = `/convertir?cantidad=${amount}&origen=${origin}&destino=${destination}`;
+                const response = await fetch(`${API_BASE_URL}${endpoint}`);
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    const montoFormateado = formatter.format(data.monto_convertido);
+                    
+                    const destinationName = CURRENCY_NAMES[destination] || destination;
+                    
+                    resultDiv.innerHTML = `<strong>${destinationName}: ${montoFormateado}</strong>`;
+                    
+                    const fechaFormateada = formatTimestamp(data.detalle.timestamp_actual);
+                    timestampInfoDiv.innerHTML = `
+                        ID Tasa: <b>${data.detalle.id_tasa_actual}</b> | 
+                        Última Actualización: ${fechaFormateada}
+                    `;
+                    errorDiv.textContent = '';
+
+                } else {
+                    errorDiv.textContent = data.error || 'Error desconocido en la conversión.';
+                    resultDiv.textContent = 'Error.';
+                    timestampInfoDiv.textContent = '';
+                }
+            } catch (error) {
+                console.error("Error durante la conversión:", error);
+                errorDiv.textContent = "Error al conectar con el servicio de conversión.";
+                resultDiv.textContent = 'Fallo.';
+            } finally {
+                hideLoading();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadCurrencies);
+    </script>
+</body>
+</html>
