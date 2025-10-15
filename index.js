@@ -1,310 +1,172 @@
 const express = require('express');
-const { google } = require('googleapis'); 
+const { google } = require('googleapis');
 const app = express();
 
-// --- CONFIGURACIÓN DE ENTORNO ---
+// --- CONFIGURACIÓN DE ENTORNO PARA MIGUELACHO ---
 const PORT = process.env.PORT || 8080;
-const CREDENTIALS_PATH = '/workspace/credentials.json'; 
-const SPREADSHEET_ID = '19Lzcyy3YyeoGCffCjoDHK1tXgn_QkPmhGl7vbDHyrMU';
-const MAIN_SHEET_NAME = 'Datos_Para_La_App'; 
-const RANGO_TASAS = 'A1:AL999'; // Rango para las tasas dinámicas
 
-// --- CONSTANTE Y FUNCIONES PARA EL SERVICIO DE CONVERSIÓN ---
+// --- Configuración de la Hoja de TASAS ---
+const SPREADSHEET_ID = '1jv-wydSjH84MLUtj-zRvHsxUlpEiqe5AlkTkr6K2248';
+const TASAS_SHEET_NAME = 'Mercado';
+const TASAS_SHEET_RANGE = 'A1:M1000';
 
-// Matriz de Factores de Ganancia Fija
-const MATRIZ_CRUCE_FACTORES = [
-    { "+/-": "VES_D", "VES_O": "1,00", "PEN_O": "0,94", "COP_O": "0,93", "CLP_O": "0,93", "ARS_O": "0,92", "BRL_O": "0,90", "PYG_O": "0,90", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "PEN_D", "VES_O": "0,90", "PEN_O": "1,00", "COP_O": "0,90", "CLP_O": "0,90", "ARS_O": "0,90", "BRL_O": "0,90", "PYG_O": "0,90", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "COP_D", "VES_O": "0,90", "PEN_O": "0,90", "COP_O": "1,00", "CLP_O": "0,90", "ARS_O": "0,90", "BRL_O": "0,90", "PYG_O": "0,90", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "CLP_D", "VES_O": "0,90", "PEN_O": "0,90", "COP_O": "0,90", "CLP_O": "1,00", "ARS_O": "0,90", "BRL_O": "0,90", "PYG_O": "0,90", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "ARS_D", "VES_O": "0,90", "PEN_O": "0,90", "COP_O": "0,90", "CLP_O": "0,90", "ARS_O": "1,00", "BRL_O": "0,90", "PYG_O": "0,90", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "BRL_D", "VES_O": "0,90", "PEN_O": "0,90", "COP_O": "0,90", "CLP_O": "0,90", "ARS_O": "0,90", "BRL_O": "1,00", "PYG_O": "0,90", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "PYG_D", "VES_O": "0,90", "PEN_O": "0,90", "COP_O": "0,90", "CLP_O": "0,90", "ARS_O": "0,90", "BRL_O": "0,90", "PYG_O": "1,00", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "MXN_D", "VES_O": "0,85", "PEN_O": "0,85", "COP_O": "0,85", "CLP_O": "0,85", "ARS_O": "0,85", "BRL_O": "0,85", "PYG_O": "0,85", "MXN_O": "1", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "USD_D", "VES_O": "0,85", "PEN_O": "0,85", "COP_O": "0,85", "CLP_O": "0,85", "ARS_O": "0,85", "BRL_O": "0,85", "PYG_O": "0,85", "MXN_O": "0,85", "USD_O": "1", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "ECU_D", "VES_O": "0,85", "PEN_O": "0,85", "COP_O": "0,85", "CLP_O": "0,85", "ARS_O": "0,85", "BRL_O": "0,85", "PYG_O": "0,85", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "1", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "PAN_D", "VES_O": "0,85", "PEN_O": "0,85", "COP_O": "0,85", "CLP_O": "0,85", "ARS_O": "0,85", "BRL_O": "0,85", "PYG_O": "0,85", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "1", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "EUR_D", "VES_O": "0,85", "PEN_O": "0,85", "COP_O": "0,85", "CLP_O": "0,85", "ARS_O": "0,85", "BRL_O": "0,85", "PYG_O": "0,85", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "1", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "DOP_D", "VES_O": "0,85", "PEN_O": "0,85", "COP_O": "0,85", "CLP_O": "0,85", "ARS_O": "0,85", "BRL_O": "0,85", "PYG_O": "0,85", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "1", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "BOB_D", "VES_O": "0,85", "PEN_O": "0,85", "COP_O": "0,85", "CLP_O": "0,85", "ARS_O": "0,85", "BRL_O": "0,85", "PYG_O": "0,85", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "1", "CRC_O": "0,85", "UYU_O": "0,85" },
-    { "+/-": "CRC_D", "VES_O": "0,85", "PEN_O": "0,85", "COP_O": "0,85", "CLP_O": "0,85", "ARS_O": "0,85", "BRL_O": "0,85", "PYG_O": "0,85", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "1", "UYU_O": "0,85" },
-    { "+/-": "UYU_D", "VES_O": "0,85", "PEN_O": "0,85", "COP_O": "0,85", "CLP_O": "0,85", "ARS_O": "0,85", "BRL_O": "0,85", "PYG_O": "0,85", "MXN_O": "0,85", "USD_O": "0,85", "ECU_O": "0,85", "PAN_O": "0,85", "EUR_O": "0,85", "DOP_O": "0,85", "BOB_O": "0,85", "CRC_O": "0,85", "UYU_O": "1" }
-];
+// --- Configuración de la Hoja de GANANCIAS (Actualizado a tu estructura) ---
+const GANANCIAS_SHEET_NAME = 'miguelacho';
+const GANANCIAS_SHEET_RANGE = 'B2:L12'; // Rango exacto que me indicaste
 
-// Convierte cadena con coma decimal a número (ej. "0,93" -> 0.93)
+// Variable global para almacenar la matriz de ganancias como una tabla (array de arrays)
+let MATRIZ_DE_GANANCIAS = [];
+
+// --- FUNCIONES DE UTILIDAD ---
 function parseFactor(factorString) {
-    if (typeof factorString !== 'string') return 1.0;
-    return parseFloat(factorString.replace(',', '.')) || 1.0; 
+    if (typeof factorString !== 'string' || factorString.trim() === '') return 1.0;
+    return parseFloat(factorString.replace(',', '.')) || 1.0;
 }
 
-
-// --- FUNCIONES DE UTILIDAD (TU CÓDIGO ORIGINAL) ---
-
-function transformToObjects(data) {
-    if (!data || data.length === 0) return [];
-    const headers = data[0].map(h => h.trim());
-    const rows = data.slice(1);
-
-    return rows.map(row => {
-        const obj = {};
-        headers.forEach((header, index) => {
-            const key = header ? header : `Columna${index}`;
-            obj[key] = row[index] || ''; 
-        });
-        return obj;
-    }).filter(obj => Object.values(obj).some(val => val !== '')); 
+function transformTasasToObjects(data) {
+    if (!data || data.length < 2) return [];
+    const headers = data[0].map(h => h.trim());
+    const rows = data.slice(1);
+    return rows.map(row => {
+        const obj = {};
+        headers.forEach((header, index) => obj[header] = row[index] || '');
+        return obj;
+    });
 }
 
 // --- FUNCIÓN PRINCIPAL DE GOOGLE SHEETS ---
+async function getSheetData(sheetName, range, raw = false) {
+    const auth = new google.auth.GoogleAuth({
+        credentials: {
+            client_email: process.env.GOOGLE_CLIENT_EMAIL,
+            private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        },
+        scopes: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+    });
 
-async function getSheetData(range) {
-    const auth = new google.auth.GoogleAuth({
-        keyFile: CREDENTIALS_PATH,
-        scopes: 'https://www.googleapis.com/auth/spreadsheets.readonly',
-    });
+    const sheets = google.sheets({ version: 'v4', auth });
 
-    const sheets = google.sheets({ version: 'v4', auth });
-    
-    try {
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${MAIN_SHEET_NAME}!${range}`, 
-        });
-        
-        let data = transformToObjects(response.data.values);
+    try {
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${sheetName}!${range}`,
+        });
+        
+        // Si raw es true, devolvemos la tabla directamente. Si no, la transformamos.
+        return raw ? response.data.values : transformTasasToObjects(response.data.values);
 
-        // FILTRADO CENTRALIZADO: Si el rango es el de tasas dinámicas, devolvemos solo el último IDTAS
-        if (range === RANGO_TASAS && Array.isArray(data) && data.length > 0) {
-            const latestRow = data.reduce((max, current) => {
-                const maxIdtasNum = parseFloat(max.IDTAS) || 0; 
-                const currentIdtasNum = parseFloat(current.IDTAS) || 0;
-                return currentIdtasNum > maxIdtasNum ? current : max;
-            }, data[0]);
-            
-            // Devolvemos el array con un solo objeto
-            return [latestRow]; 
-        }
-
-        return data;
-
-    } catch (err) {
-        console.error(`La API de Google Sheets devolvió un error al leer el rango ${range}: ${err}`);
-        throw err; 
-    }
+    } catch (err) {
+        console.error(`La API de Google Sheets devolvió un error al leer ${sheetName}!${range}: ${err}`);
+        throw err;
+    }
 }
 
 // --- MIDDLEWARE Y RUTA RAÍZ ---
 app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*'); 
-    res.setHeader('Content-Type', 'application/json');
-    next();
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+    next();
 });
 
-// Ruta raíz que ahora devuelve HTML con enlaces directos
 app.get('/', (req, res) => {
-    const hostUrl = req.headers.host; 
-
-    const endpoints = [
-        { path: '/tasas', description: 'Tabla 1: Datos Dinámicos (Tasas de Monedas)' },
-        { path: '/matriz_cruce', description: 'Tabla 2: Matriz de Cruce Estática' },
-        { path: '/matriz_emojis', description: 'Tabla 3: Matriz de Emojis/Factores Estática' },
-        { path: '/convertir?cantidad=100&origen=USD&destino=COP', description: 'Servicio de Conversión (Calculadora Final)' } 
-    ];
-    
-    // RESTAURACIÓN COMPLETA DEL HTML Y CSS
-    const htmlContent = `
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>NOCTUS API - Endpoints</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    background-color: #0d1117; 
-                    color: #c9d1d9; 
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 100vh;
-                    margin: 0;
-                }
-                .container {
-                    background-color: #161b22; 
-                    padding: 30px;
-                    border-radius: 12px;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-                    width: 90%;
-                    max-width: 600px;
-                }
-                h1 {
-                    color: #58a6ff; 
-                    border-bottom: 2px solid #30363d;
-                    padding-bottom: 10px;
-                    margin-top: 0;
-                }
-                .endpoint-list {
-                    list-style: none;
-                    padding: 0;
-                }
-                .endpoint-item {
-                    margin-bottom: 15px;
-                    background-color: #21262d; 
-                    padding: 15px;
-                    border-radius: 8px;
-                    transition: background-color 0.3s;
-                }
-                .endpoint-item:hover {
-                    background-color: #30363d;
-                }
-                .endpoint-item a {
-                    text-decoration: none;
-                    color: #58a6ff;
-                    font-weight: bold;
-                    display: block;
-                    font-size: 1.1em;
-                    margin-bottom: 5px;
-                    word-wrap: break-word; 
-                }
-                .endpoint-item p {
-                    margin: 0;
-                    color: #8b949e; 
-                    font-size: 0.9em;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>API de NOCTUS en Línea</h1>
-                <p>El servicio de datos de Google Sheets está funcionando. Haz clic en un enlace para acceder a los datos JSON de la tabla correspondiente:</p>
-                <ul class="endpoint-list">
-                    ${endpoints.map(ep => {
-                        const linkPath = ep.path.startsWith('/') ? ep.path : '/' + ep.path;
-                        const fullLinkDisplay = `${hostUrl}${linkPath}`; 
-                        return `
-                        <li class="endpoint-item">
-                            <a href="${linkPath}">${fullLinkDisplay}</a>
-                            <p>${ep.description}</p>
-                        </li>
-                        `;
-                    }).join('')}
-                </ul>
-                <p style="text-align: center; font-size: 0.8em; color: #484f58;">Nota: Esta página es solo para referencia. Los datos son entregados en formato JSON.</p>
-            </div>
-        </body>
-        </html>
-    `; 
-
-    res.setHeader('Content-Type', 'text/html'); 
-    res.send(htmlContent);
+    res.setHeader('Content-Type', 'text/html');
+    res.send('<h1>API para Calculadora Miguelacho está en línea</h1>');
 });
 
-// --- RUTAS DE LA API (Corregidas para coexistencia) ---
+// --- RUTAS DE LA API ---
 
-// 1. Ruta de Datos Dinámicos (Recibe el array filtrado de getSheetData)
 app.get('/tasas', async (req, res) => {
     try {
-        let data = await getSheetData(RANGO_TASAS); 
-        res.json(data); // Devuelve [latestRow] gracias al filtro centralizado
+        const data = await getSheetData(TASAS_SHEET_NAME, TASAS_SHEET_RANGE);
+        if (!Array.isArray(data) || data.length === 0) {
+            return res.status(404).json({ error: "No se encontraron datos de tasas." });
+        }
+        const latestRow = data[data.length - 1];
+        res.json([latestRow]);
     } catch (error) {
-        console.error('Error en /tasas: ', error.message);
-        res.status(500).json({ 
-            error: 'Error al obtener datos dinámicos (Tasas)', 
-            detalle: error.message 
-        });
+        res.status(500).json({ error: 'Error al obtener las tasas', detalle: error.message });
     }
 });
 
-
-// 2. Ruta de Matriz de Cruce Estática
-app.get('/matriz_cruce', async (req, res) => {
-    try {
-        const data = await getSheetData('AN1:BD17'); 
-        res.json(data);
-    } catch (error) {
-        console.error('Error en /matriz_cruce: ', error.message);
-        res.status(500).json({ error: 'Error al obtener Matriz de Cruce (Estática 1)', detalle: error.message });
-    }
+app.get('/ganancias', (req, res) => {
+    if (MATRIZ_DE_GANANCIAS.length > 0) {
+        res.json(MATRIZ_DE_GANANCIAS);
+    } else {
+        res.status(404).json({ error: "La matriz de ganancias no ha sido cargada." });
+    }
 });
 
-// 3. Ruta de Matriz de Emojis/Factores Estática
-app.get('/matriz_emojis', async (req, res) => {
-    try {
-        const data = await getSheetData('AN19:BZ37'); 
-        res.json(data);
-    } catch (error) {
-        console.error('Error en /matriz_emojis: ', error.message);
-        res.status(500).json({ error: 'Error al obtener Matriz Emojis (Estática 2)', detalle: error.message });
-    }
-});
-
-
-// 4. SERVICIO DE CONVERSIÓN CENTRALIZADO
+// --- SERVICIO DE CONVERSIÓN (LÓGICA ADAPTADA A LA MATRIZ) ---
 app.get('/convertir', async (req, res) => {
-    // 1. Obtener y validar parámetros
     const { cantidad, origen, destino } = req.query;
 
     const monto = parseFloat(cantidad);
-    const O = origen ? origen.toUpperCase() : null;
-    const D = destino ? destino.toUpperCase() : null;
+    const O = origen ? origen.toUpperCase() : null; // Ej: USD
+    const D = destino ? destino.toUpperCase() : null; // Ej: COP
 
     if (!monto || !O || !D) {
         return res.status(400).json({ error: "Parámetros faltantes o inválidos." });
     }
+    
+    if (MATRIZ_DE_GANANCIAS.length === 0) {
+        return res.status(503).json({ error: "El servicio no está listo, la matriz de ganancias no ha sido cargada." });
+    }
 
     try {
-        // 2. OBTENER ÚLTIMA FILA: getSheetData ya devuelve [latestRow] gracias al filtro
-        const latestRowArray = await getSheetData(RANGO_TASAS); 
-        
-        if (!Array.isArray(latestRowArray) || latestRowArray.length === 0) {
-             return res.status(503).json({ error: "No se pudieron obtener datos de tasas dinámicas recientes." });
+        // --- BÚSQUEDA DEL FACTOR DE GANANCIA EN LA MATRIZ ---
+        const headersColumnas = MATRIZ_DE_GANANCIAS[0]; // Fila 2 de la hoja
+        const originIndex = headersColumnas.indexOf(O);
+
+        if (originIndex === -1) {
+            return res.status(404).json({ error: `Moneda de origen '${O}' no encontrada en los encabezados (fila 2) de la matriz de ganancias.` });
+        }
+
+        let destinationRow = null;
+        // Buscamos la fila de destino recorriendo la primera columna (columna B de la hoja)
+        for (let i = 0; i < MATRIZ_DE_GANANCIAS.length; i++) {
+            if (MATRIZ_DE_GANANCIAS[i][0] === D) {
+                destinationRow = MATRIZ_DE_GANANCIAS[i];
+                break;
+            }
+        }
+
+        if (!destinationRow) {
+            return res.status(404).json({ error: `Moneda de destino '${D}' no encontrada en la columna B de la matriz de ganancias.` });
         }
         
-        const latestRow = latestRowArray[0]; // Extraemos el único objeto
+        const Factor_F = parseFactor(destinationRow[originIndex]);
+        // --- FIN DE LA BÚSQUEDA ---
 
-        // 3. EXTRACCIÓN Y VALIDACIÓN DE TASAS DINÁMICAS (ORIGEN _O y DESTINO _D)
-        const Tasa_O_key = `${O}_O`; // Origen
-        const Tasa_D_key = `${D}_D`; // Destino
+        const tasasData = await getSheetData(TASAS_SHEET_NAME, TASAS_SHEET_RANGE);
+        if (!tasasData || tasasData.length === 0) {
+            return res.status(503).json({ error: "No se pudieron obtener datos de tasas dinámicas." });
+        }
+        const latestRow = tasasData[tasasData.length - 1];
 
-        const T_O_str = latestRow[Tasa_O_key];
-        const T_D_str = latestRow[Tasa_D_key];
-        
+        const T_O_str = latestRow[`${O}_O`];
+        const T_D_str = latestRow[`${D}_D`];
+
         if (!T_O_str || !T_D_str) {
-             return res.status(404).json({ error: `Clave no encontrada en Sheets. Verifique que ${Tasa_O_key} y ${Tasa_D_key} existan.` });
+            return res.status(404).json({ error: `Tasa no encontrada en la hoja 'Mercado'.` });
         }
 
         const T_O = parseFloat(T_O_str.replace(',', '.')) || 0;
         const T_D = parseFloat(T_D_str.replace(',', '.')) || 0;
 
         if (T_O === 0 || T_D === 0) {
-            return res.status(404).json({ error: "El valor de una de las tasas dinámicas es cero o inválido." });
+            return res.status(404).json({ error: "El valor de una de las tasas es cero o inválido." });
         }
 
-        // 4. BUSCAR FACTOR DE GANANCIA (F) en la matriz fija
-        const claveMatrizDestino = `${D}_D`; // Fila
-        const claveMatrizOrigen = `${O}_O`; // Columna
+        const montoConvertido = monto * ((T_D / T_O) * Factor_F);
 
-        const filaDestino = MATRIZ_CRUCE_FACTORES.find(row => row["+/-"] === claveMatrizDestino);
-        
-        if (!filaDestino || !filaDestino[claveMatrizOrigen]) {
-            return res.status(404).json({ error: `Factor de ganancia (matriz) no encontrado para el par ${O} -> ${D}.` });
-        }
-
-        const Factor_F = parseFactor(filaDestino[claveMatrizOrigen]);
-
-        // 5. CÁLCULO FINAL: Monto * ( (T_D / T_O) * F )
-        const montoConvertido = monto * ( (T_D / T_O) * Factor_F );
-
-        // 6. Devolver resultado JSON con IDTAS y FECHA (Timestamp)
         res.json({
             status: "success",
             conversion_solicitada: `${monto} ${O} a ${D}`,
             monto_convertido: parseFloat(montoConvertido.toFixed(4)),
             detalle: {
                 factor_ganancia: Factor_F,
-                id_tasa_actual: latestRow.IDTAS,
-                timestamp_actual: latestRow.FECHA 
+                id_tasa_actual: latestRow.IDTAS || 'N/A',
+                timestamp_actual: latestRow.FECHA || new Date().toISOString()
             }
         });
 
@@ -314,9 +176,24 @@ app.get('/convertir', async (req, res) => {
     }
 });
 
+// --- INICIO DEL SERVIDOR ---
+async function startServer() {
+    try {
+        console.log('Cargando matriz de ganancias desde Google Sheets (hoja: miguelacho)...');
+        // Cargamos los datos en formato raw (tabla)
+        MATRIZ_DE_GANANCIAS = await getSheetData(GANANCIAS_SHEET_NAME, GANANCIAS_SHEET_RANGE, true);
+        if (MATRIZ_DE_GANANCIAS && MATRIZ_DE_GANANCIAS.length > 0) {
+            console.log('¡Matriz de ganancias cargada exitosamente!');
+        } else {
+            console.error('ALERTA: La matriz de ganancias no se pudo cargar o está vacía.');
+        }
+    } catch (error) {
+        console.error('ERROR CRÍTICO: No se pudo cargar la matriz de ganancias al iniciar.', error);
+    }
+    
+    app.listen(PORT, () => {
+        console.log(`Servidor para Miguelacho API escuchando en el puerto: ${PORT}`);
+    });
+}
 
-// --- INICIO DEL SERVIDOR (TU CÓDIGO ORIGINAL) ---
-app.listen(PORT, () => {
-    console.log(`Servidor de NOCTUS API escuchando en el puerto: ${PORT}`);
-    console.log(`Acceso API de prueba: http://localhost:${PORT}/`);
-});
+startServer();
