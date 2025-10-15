@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculadora de Divisas NOCTUS</title>
+    <title>Calculadora de Divisas - Cambios Miguelacho</title>
     <style>
         /* ESTILOS GLOBALES */
         body {
@@ -36,15 +36,6 @@
             color: #333;
             margin-bottom: 2px; 
         }
-        .header-branding .tagline {
-            font-size: 1em; 
-            color: #555;
-            margin-bottom: 2px;
-        }
-        .header-branding .version-info {
-            font-size: 0.8em; 
-            color: #777;
-        }
         /* CONTENEDOR PRINCIPAL - ALTURA Y ANCHO */
         .container {
             background-color: #fff;
@@ -70,11 +61,12 @@
             font-size: 0.85em;
         }
         input[type="number"], select {
-            width: calc(100% - 20px);
+            width: 100%; /* Corregido para ocupar todo el ancho */
             padding: 7px; 
             margin-bottom: 10px; 
             border: 1px solid #ddd;
             border-radius: 4px;
+            box-sizing: border-box; /* Añadido para consistencia */
         }
         /* RESULTADO E INFO */
         .result {
@@ -103,9 +95,8 @@
 </head>
 <body>
     <div class="header-branding">
-        <img src="https://raw.githubusercontent.com/prietocoin/noctus/main/buho.jpeg" alt="Logo Búho FUNDABLOCK"> 
-        <div class="brand-name">FUNDABLOCK</div>
-        <div class="tagline">NOCTUS</div>
+        <img src="https://placehold.co/100x100/333/FFF/png?text=M" alt="Logo Miguelacho"> 
+        <div class="brand-name">Miguelacho</div>
     </div>
 
     <div class="container">
@@ -129,6 +120,9 @@
     <script>
         const API_BASE_URL = 'https://noctus.jairokov.com'; 
 
+        // CAMBIO 3: Lista de monedas permitidas para este cliente
+        const CLIENT_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES'];
+
         const loadingDiv = document.getElementById('loading');
         const errorDiv = document.getElementById('error');
         const resultDiv = document.getElementById('result');
@@ -138,25 +132,17 @@
         const originSelect = document.getElementById('originCurrency');
         const destinationSelect = document.getElementById('destinationCurrency');
 
-        // Mapeo de códigos ISO a nombres de país/moneda
+        // CAMBIO 4: Mapeo de nombres ajustado a las monedas del cliente
         const CURRENCY_NAMES = {
-            'USD': 'Dólar Estadounidense (USD)',
-            'EUR': 'Euro (EUR)',
-            'VES': 'Bolívar Soberano (VES)',
             'COP': 'Peso Colombiano (COP)',
+            'BRL': 'Real Brasileño (BRL)',
             'PEN': 'Sol Peruano (PEN)',
             'CLP': 'Peso Chileno (CLP)',
-            'ARS': 'Peso Argentino (ARS)',
-            'BRL': 'Real Brasileño (BRL)',
-            'PYG': 'Guaraní Paraguayo (PYG)',
+            'USD': 'Dólar Estadounidense (USD)',
             'MXN': 'Peso Mexicano (MXN)',
-            'DOP': 'Peso Dominicano (DOP)',
-            'BOB': 'Boliviano (BOB)',
-            'CRC': 'Colón Costarricense (CRC)',
-            'UYU': 'Peso Uruguayo (UYU)',
             'ECU': 'Dólar Ecuatoriano (ECU)',
-            'PAN': 'Dólar Panameño (PAN)',
-            'CAD': 'Dólar Canadiense (CAD)',
+            'EUR': 'Euro (EUR)',
+            'VES': 'Bolívar Soberano (VES)'
         };
 
         // Formateador para números
@@ -196,7 +182,6 @@
         function populateDropdown(selectElement, currencies) {
             selectElement.innerHTML = ''; 
             currencies.forEach(currency => {
-                // IGNORAR/ELIMINAR PYUSD
                 if (currency === 'PYUSD') return;
                 
                 const option = document.createElement('option');
@@ -221,9 +206,13 @@
                 
                 const latestRow = dataArray[0];
 
-                const currencies = Object.keys(latestRow)
-                                         .filter(key => key.endsWith('_O'))
-                                         .map(key => key.slice(0, -2));
+                // CAMBIO 5: Lógica para filtrar las monedas
+                const allApiCurrencies = Object.keys(latestRow)
+                                             .filter(key => key.endsWith('_O'))
+                                             .map(key => key.slice(0, -2));
+                
+                // Filtramos las monedas de la API contra la lista permitida para el cliente
+                const currencies = allApiCurrencies.filter(c => CLIENT_CURRENCIES.includes(c));
 
                 if (currencies.length === 0) {
                     throw new Error("No se encontraron códigos de divisa válidos en la respuesta.");
