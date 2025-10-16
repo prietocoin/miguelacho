@@ -1,261 +1,189 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CAMBIOS MIGUELACHO | Calculadora</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0d1117; }
-        .card { box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4); }
-    </style>
-</head>
-<body class="min-h-screen flex items-center justify-center p-4">
+<script>
+    // *** CONFIGURACIÓN CLAVE: Se actualizó a tu API Maestra de NOCTUS ***
+    const API_BASE_URL = 'https://noctus.jairokov.com';
+    const ENDPOINT_MATRIZ = `${API_BASE_URL}/matriz-ganancia`; 
+    
+    // Monedas que el usuario desea mostrar en la calculadora
+    const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
+    
+    // Mapeo para monedas que usan códigos no ISO (ECU usa USD)
+    const CURRENCY_MAP = {
+        'ECU': 'USD' 
+    };
 
-    <div class="card w-full max-w-md bg-gray-800 p-6 sm:p-8 rounded-xl text-white">
-        <div class="text-center mb-6">
-            <img src="https://placehold.co/60x60/161b22/8b949e?text=💰" alt="Logo" class="mx-auto rounded-full bg-gray-900 p-2 mb-2">
-            <h2 class="text-xl font-extrabold text-white">CAMBIOS MIGUELACHO</h2>
-            <p class="text-sm text-yellow-500">Servicio de Divisas API</p>
-        </div>
+    // Almacenamiento local de la Matriz de Tasas para el cálculo
+    let CURRENCY_MATRIX = {}; 
+    
+    // Elementos DOM
+    const origenSelect = document.getElementById('origen');
+    const destinoSelect = document.getElementById('destino');
+    const form = document.getElementById('conversion-form');
+    const resultadoCard = document.getElementById('resultado-card');
+    const resultadoMonto = document.getElementById('resultado-monto');
+    const detalleTasa = document.getElementById('detalle-tasa');
+    const errorMessage = document.getElementById('error-message');
+    const calculateButton = document.getElementById('calculate-button');
 
-        <h1 class="text-2xl font-bold mb-6 text-center text-blue-400 border-b border-gray-700 pb-3">
-            Calculadora de Divisas
-        </h1>
+    // --- LÓGICA DE CARGA DE MONEDAS ---
+    async function fetchAndFillCurrencies() {
+        calculateButton.textContent = 'Cargando...';
+        calculateButton.disabled = true;
 
-        <form id="conversion-form">
-            <div class="mb-4">
-                <label for="cantidad" class="block text-sm font-medium text-gray-400 mb-1">Cantidad a Convertir:</label>
-                <input type="number" id="cantidad" value="100" min="0.01" step="0.01" required
-                        class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white">
-            </div>
-
-            <div class="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                    <label for="origen" class="block text-sm font-medium text-gray-400 mb-1">De:</label>
-                    <select id="origen" required
-                            class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white appearance-none">
-                        <option value="" disabled selected>Cargando monedas...</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="destino" class="block text-sm font-medium text-gray-400 mb-1">A:</label>
-                    <select id="destino" required
-                            class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white appearance-none">
-                        <option value="" disabled selected>Cargando monedas...</option>
-                    </select>
-                </div>
-            </div>
-
-            <button type="submit" id="calculate-button"
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50">
-                Calcular Conversión
-            </button>
-        </form>
-
-        <div class="mt-8">
-            <div id="resultado-card" class="bg-gray-700 p-4 rounded-lg text-center hidden">
-                <p id="resultado-monto" class="text-3xl font-extrabold text-green-400">0.00 COP</p>
-                <div class="text-sm text-gray-400 mt-2">
-                    <p id="detalle-tasa">Tasa Utilizada: N/A ; Factor de Ganancia: N/A</p>
-                </div>
-            </div>
-            <p id="error-message" class="text-sm text-red-500 text-center mt-3 hidden">Error al realizar la conversión.</p>
-        </div>
-    </div>
-
-    <script>
-        // *** CONFIGURACIÓN CLAVE: Se actualizó a tu API Maestra de NOCTUS ***
-        const API_BASE_URL = 'https://noctus.jairokov.com';
-        const ENDPOINT_MATRIZ = `${API_BASE_URL}/matriz-ganancia`; 
-        
-        // Monedas que el usuario desea mostrar en la calculadora
-        const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
-        
-        // Mapeo para monedas que usan códigos no ISO (ECU usa USD)
-        const CURRENCY_MAP = {
-            'ECU': 'USD' 
-        };
-
-        // Almacenamiento local de la Matriz de Tasas para el cálculo
-        let CURRENCY_MATRIX = {}; 
-        
-        // Elementos DOM
-        const origenSelect = document.getElementById('origen');
-        const destinoSelect = document.getElementById('destino');
-        const form = document.getElementById('conversion-form');
-        const resultadoCard = document.getElementById('resultado-card');
-        const resultadoMonto = document.getElementById('resultado-monto');
-        const detalleTasa = document.getElementById('detalle-tasa');
-        const errorMessage = document.getElementById('error-message');
-        const calculateButton = document.getElementById('calculate-button');
-
-        // --- LÓGICA DE CARGA DE MONEDAS ---
-        async function fetchAndFillCurrencies() {
-            calculateButton.textContent = 'Cargando...';
-            calculateButton.disabled = true;
-
-            try {
-                // 1. Obtener la Matriz de Cruce
-                const response = await fetch(ENDPOINT_MATRIZ);
-                if (!response.ok) throw new Error('No se pudo cargar la matriz de la API.');
-                
-                const data = await response.json();
-                if (!data || data.length === 0) throw new Error('Matriz vacía.');
-
-                // 2. Convertir el array de filas de la API en un mapa de objeto para una fácil consulta: 
-                // { 'USD': { '': 'USD', 'COP': 0.88, ... } }
-                const matrixMap = {};
-                data.forEach(row => {
-                    // *** CORRECCIÓN CLAVE: Usamos la clave vacía ("") para obtener el código de moneda de la fila ***
-                    const sourceCode = row[""]; 
-                    if (sourceCode) {
-                        matrixMap[sourceCode] = row;
-                    }
-                });
-
-                CURRENCY_MATRIX = matrixMap;
-
-                // 3. Obtener la lista de monedas disponibles que deseamos mostrar
-                const API_MONEDAS_DISPONIBLES = Object.keys(CURRENCY_MATRIX);
-                
-                // Filtramos la lista deseada por el usuario contra las monedas disponibles en la API
-                const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
-                    const lookupCode = CURRENCY_MAP[moneda] || moneda;
-                    // Verificamos si la moneda está en las filas de la matriz
-                    return API_MONEDAS_DISPONIBLES.includes(lookupCode);
-                });
-                
-                if (finalMonedas.length === 0) throw new Error('No se encontraron códigos de moneda válidos en la matriz.');
-
-                // 4. Llenar los selectores
-                origenSelect.innerHTML = '';
-                destinoSelect.innerHTML = '';
-                
-                finalMonedas.forEach(moneda => {
-                    const displayText = moneda === 'ECU' ? 'ECU (Dólar Ecuatoriano)' : `${moneda}`;
-                    const optionOrigen = new Option(displayText, moneda);
-                    const optionDestino = new Option(displayText, moneda);
-                    origenSelect.add(optionOrigen);
-                    destinoSelect.add(optionDestino);
-                });
-
-                // 5. Establecer valores por defecto e iniciar cálculo
-                origenSelect.value = 'USD'; 
-                destinoSelect.value = 'COP'; 
-                calculateConversion(new Event('submit')); 
-                
-            } catch (error) {
-                console.error('Error al cargar la lista de monedas:', error);
-                origenSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
-                destinoSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
-                errorMessage.textContent = `ERROR: No se pudo obtener la lista de monedas. ${error.message}`;
-                errorMessage.classList.remove('hidden');
-            } finally {
-                 calculateButton.textContent = 'Calcular Conversión';
-                 calculateButton.disabled = false;
-            }
-        }
-
-        // --- LÓGICA DE CÁLCULO LOCAL ---
-        let debounceTimeout;
-        function calculateConversion(e) {
-            if (e) e.preventDefault();
-            clearTimeout(debounceTimeout);
-            // Esperar 300ms para evitar múltiples llamadas al escribir
-            debounceTimeout = setTimeout(handleConversion, 300);
-        }
-
-        function handleConversion(e) {
-            if (e && e.preventDefault) e.preventDefault();
+        try {
+            // 1. Obtener la Matriz de Cruce
+            const response = await fetch(ENDPOINT_MATRIZ);
+            if (!response.ok) throw new Error('No se pudo cargar la matriz de la API.');
             
-            resultadoCard.classList.add('hidden');
-            errorMessage.classList.add('hidden');
+            const data = await response.json();
+            if (!data || data.length === 0) throw new Error('Matriz vacía.');
 
-            const cantidad = document.getElementById('cantidad').value;
-            const origen = origenSelect.value;
-            const destino = destinoSelect.value;
-
-            if (!cantidad || !origen || !destino || !Object.keys(CURRENCY_MATRIX).length) {
-                if (Object.keys(CURRENCY_MATRIX).length) {
-                    errorMessage.textContent = 'Faltan campos por completar.';
-                    errorMessage.classList.remove('hidden');
+            // 2. Convertir el array de filas de la API en un mapa de objeto para una fácil consulta
+            const matrixMap = {};
+            data.forEach(row => {
+                // CORRECCIÓN: Usamos la clave vacía ("") para obtener el código de moneda de la fila
+                const sourceCode = row[""]; 
+                if (sourceCode) {
+                    matrixMap[sourceCode] = row;
                 }
+            });
+
+            CURRENCY_MATRIX = matrixMap;
+
+            // 3. Obtener la lista de monedas disponibles que deseamos mostrar
+            const API_MONEDAS_DISPONIBLES = Object.keys(CURRENCY_MATRIX);
+            
+            // Filtramos la lista deseada por el usuario contra las monedas disponibles en la API
+            const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
+                const lookupCode = CURRENCY_MAP[moneda] || moneda;
+                return API_MONEDAS_DISPONIBLES.includes(lookupCode);
+            });
+            
+            if (finalMonedas.length === 0) throw new Error('No se encontraron códigos de moneda válidos en la matriz.');
+
+            // 4. Llenar los selectores
+            origenSelect.innerHTML = '';
+            destinoSelect.innerHTML = '';
+            
+            finalMonedas.forEach(moneda => {
+                const displayText = moneda === 'ECU' ? 'ECU (Dólar Ecuatoriano)' : `${moneda}`;
+                const optionOrigen = new Option(displayText, moneda);
+                const optionDestino = new Option(displayText, moneda);
+                origenSelect.add(optionOrigen);
+                destinoSelect.add(optionDestino);
+            });
+
+            // 5. Establecer valores por defecto e iniciar cálculo
+            origenSelect.value = 'USD'; 
+            destinoSelect.value = 'COP'; 
+            calculateConversion(new Event('submit')); 
+            
+        } catch (error) {
+            console.error('Error al cargar la lista de monedas:', error);
+            origenSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
+            destinoSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
+            errorMessage.textContent = `ERROR: No se pudo obtener la lista de monedas. ${error.message}`;
+            errorMessage.classList.remove('hidden');
+        } finally {
+             calculateButton.textContent = 'Calcular Conversión';
+             calculateButton.disabled = false;
+        }
+    }
+
+    // --- LÓGICA DE CÁLCULO LOCAL ---
+    let debounceTimeout;
+    function calculateConversion(e) {
+        if (e) e.preventDefault();
+        clearTimeout(debounceTimeout);
+        // Esperar 300ms para evitar múltiples llamadas al escribir
+        debounceTimeout = setTimeout(handleConversion, 300);
+    }
+
+    function handleConversion(e) {
+        if (e && e.preventDefault) e.preventDefault();
+        
+        resultadoCard.classList.add('hidden');
+        errorMessage.classList.add('hidden');
+
+        const cantidad = document.getElementById('cantidad').value;
+        const origen = origenSelect.value;
+        const destino = destinoSelect.value;
+
+        if (!cantidad || !origen || !destino || !Object.keys(CURRENCY_MATRIX).length) {
+            if (Object.keys(CURRENCY_MATRIX).length) {
+                errorMessage.textContent = 'Faltan campos por completar.';
+                errorMessage.classList.remove('hidden');
+            }
+            return;
+        }
+
+        try {
+            // 1. Determinar el código real para la consulta en la matriz (mapea ECU a USD si es necesario)
+            const origenCode = CURRENCY_MAP[origen] || origen;
+            const destinoCode = CURRENCY_MAP[destino] || destino;
+
+            const cantidadFloat = parseFloat(cantidad);
+
+            if (origenCode === destinoCode) {
+                // Conversión a sí misma es 1:1
+                displayResult(cantidadFloat, 1, destino);
                 return;
             }
 
-            try {
-                // 1. Determinar el código real para la consulta en la matriz (mapea ECU a USD si es necesario)
-                const origenCode = CURRENCY_MAP[origen] || origen;
-                const destinoCode = CURRENCY_MAP[destino] || destino;
+            // 2. Buscar la tasa de conversión en la matriz
+            const origenRow = CURRENCY_MATRIX[origenCode];
 
-                const cantidadFloat = parseFloat(cantidad);
-
-                if (origenCode === destinoCode) {
-                    // Conversión a sí misma es 1:1
-                    displayResult(cantidadFloat, 1, destino);
-                    return;
-                }
-
-                // 2. Buscar la tasa de conversión en la matriz
-                const origenRow = CURRENCY_MATRIX[origenCode];
-
-                if (!origenRow) {
-                    throw new Error(`Fila de tasa para ${origenCode} no encontrada en la matriz.`);
-                }
-                
-                // La tasa de conversión es el valor en la columna de la moneda de destino
-                let tasa = origenRow[destinoCode]; 
-
-                if (tasa === undefined || tasa === null || isNaN(parseFloat(tasa))) {
-                    throw new Error(`Tasa de ${origen} a ${destino} no disponible en la matriz.`);
-                }
-
-                tasa = parseFloat(tasa);
-
-                // 3. Realizar el cálculo local
-                const montoConvertido = cantidadFloat / tasa; // ASUNCION DE FORMULA: Dividimos por el factor de ganancia.
-
-                // 4. Mostrar el resultado
-                displayResult(montoConvertido, tasa, destino);
-
-            } catch (error) {
-                console.error('Error de conversión:', error);
-                errorMessage.textContent = `Error de cálculo: ${error.message}`;
-                errorMessage.classList.remove('hidden');
+            if (!origenRow) {
+                throw new Error(`Fila de tasa para ${origenCode} no encontrada en la matriz.`);
             }
-        }
-        
-        // Función para mostrar el resultado y detalles
-        function displayResult(montoConvertido, tasa, destino) {
-            // Formato de número con separador decimal ','
-            const formatter = new Intl.NumberFormat('es-ES', { 
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 4 
-            });
             
-            const monto = formatter.format(montoConvertido);
-            const monedaDestinoDisplay = destino;
-            
-            // Usamos el separador de elementos ';' solicitado por el usuario
-            // Nota: Aquí asumimos que el valor de la matriz es el 'Factor de Ganancia' 
-            // y que la operación es DIVISIÓN (cantidad / factor_ganancia)
-            resultadoMonto.textContent = `${monedaDestinoDisplay} ${monto}`;
-            detalleTasa.innerHTML = `Factor de Ganancia: ${tasa.toFixed(6)} ; Tasa: ${tasa.toFixed(6)}`;
-            
-            resultadoCard.classList.remove('hidden');
-        }
+            // La tasa de conversión es el valor en la columna de la moneda de destino
+            let tasa = origenRow[destinoCode]; 
 
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchAndFillCurrencies();
-            form.addEventListener('submit', handleConversion);
+            if (tasa === undefined || tasa === null || isNaN(parseFloat(tasa))) {
+                throw new Error(`Tasa de ${origen} a ${destino} no disponible en la matriz.`);
+            }
 
-            // Escucha cambios para calcular automáticamente
-            origenSelect.addEventListener('change', calculateConversion);
-            destinoSelect.addEventListener('change', calculateConversion);
-            document.getElementById('cantidad').addEventListener('input', calculateConversion);
+            tasa = parseFloat(tasa);
+
+            // 3. Realizar el cálculo local
+            // *** CORRECCIÓN: Usamos MULTIPLICACIÓN según tu confirmación ***
+            const montoConvertido = cantidadFloat * tasa;
+
+            // 4. Mostrar el resultado
+            displayResult(montoConvertido, tasa, destino);
+
+        } catch (error) {
+            console.error('Error de conversión:', error);
+            errorMessage.textContent = `Error de cálculo: ${error.message}`;
+            errorMessage.classList.remove('hidden');
+        }
+    }
+    
+    // Función para mostrar el resultado y detalles
+    function displayResult(montoConvertido, tasa, destino) {
+        // Formato de número con separador decimal ','
+        const formatter = new Intl.NumberFormat('es-ES', { 
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 4 
         });
-    </script>
-</body>
-</html>
+        
+        const monto = formatter.format(montoConvertido);
+        const monedaDestinoDisplay = destino;
+        
+        // Usamos el separador de elementos ';' solicitado por el usuario
+        resultadoMonto.textContent = `${monedaDestinoDisplay} ${monto}`;
+        detalleTasa.innerHTML = `Factor de Ganancia: ${tasa.toFixed(6)} ; Tasa: ${tasa.toFixed(6)}`;
+        
+        resultadoCard.classList.remove('hidden');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchAndFillCurrencies();
+        form.addEventListener('submit', handleConversion);
+
+        // Escucha cambios para calcular automáticamente
+        origenSelect.addEventListener('change', calculateConversion);
+        destinoSelect.addEventListener('change', calculateConversion);
+        document.getElementById('cantidad').addEventListener('input', calculateConversion);
+    });
+</script>
