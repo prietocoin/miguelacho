@@ -9,7 +9,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0d1117; }
         .card { box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4); }
-        /* Estilo personalizado para las líneas de selección */
         .select-line { width: 100%; } 
     </style>
 </head>
@@ -82,12 +81,9 @@
             'ARS': 'Peso Argentino'
         };
 
-        // Almacenamiento local de los datos
         let TASAS_BASE = {}; 
-        let GANANCIA_MATRIX = {}; 
-        let ID_TAS_DATA = 'N/A'; // Nuevo para IDTAS
+        let ID_TAS_DATA = 'N/A'; 
         
-        // Elementos DOM
         const origenSelect = document.getElementById('origen');
         const destinoSelect = document.getElementById('destino');
         const form = document.getElementById('conversion-form');
@@ -104,49 +100,33 @@
             calculateButton.disabled = true;
 
             try {
-                const [respGanancia, respTasas] = await Promise.all([
-                    fetch(ENDPOINT_MATRIZ_GANANCIA),
-                    fetch(ENDPOINT_TASAS_BASE)
-                ]);
-
-                if (!respGanancia.ok) throw new Error('No se pudo cargar la matriz de ganancia.');
+                // Solo necesitamos las tasas base
+                const respTasas = await fetch(ENDPOINT_TASAS_BASE);
                 if (!respTasas.ok) throw new Error('No se pudieron cargar las tasas base.');
                 
-                const dataGanancia = await respGanancia.json();
                 const dataTasas = await respTasas.json();
 
-                // 2. Procesar Matriz de Ganancia
-                const matrixMap = {};
-                dataGanancia.forEach(row => {
-                    const sourceCode = row[""]; 
-                    if (sourceCode) {
-                        matrixMap[sourceCode] = row;
-                        // BUSCAMOS IDTAS en la matriz de ganancia (Columna1 o similar)
-                        if (row.IDTAS && ID_TAS_DATA === 'N/A') { 
-                            ID_TAS_DATA = String(row.IDTAS);
-                        }
-                    }
-                });
-                GANANCIA_MATRIX = matrixMap;
-
-                // 3. Procesar Tasas Base
                 if (dataTasas.length === 0) throw new Error('Tasas base vacías.');
                 
                 let tasasObj = Array.isArray(dataTasas) ? dataTasas[0] : dataTasas;
                 if (!tasasObj) throw new Error('Tasas base vacías.');
 
-                // BUSCAMOS IDTAS en el objeto de tasas base
+                // Buscamos IDTAS
                 if (tasasObj.IDTAS) { 
                     ID_TAS_DATA = String(tasasObj.IDTAS);
+                } else if (tasasObj.T003) { // Asumiendo T003 es el IDTAS del ejemplo
+                     ID_TAS_DATA = String(tasasObj.T003);
                 }
                 
+                // Procesar Tasas Base
                 for (const key in tasasObj) {
-                    if (key !== 'IDTAS' && key !== 'timestamp' && key !== 'fecha' && key !== 'actualizacion') {
-                        TASAS_BASE[key] = parseFloat(tasasObj[key]);
+                    if (key !== 'IDTAS' && key !== 'T003' && key !== 'timestamp' && key !== 'fecha' && key !== 'actualizacion') {
+                        // Limpiamos espacios y convertimos a número
+                        TASAS_BASE[key] = parseFloat(String(tasasObj[key]).trim());
                     }
                 }
 
-                // 4. Llenar Selectores
+                // Llenar Selectores
                 const API_MONEDAS_DISPONIBLES = Object.keys(TASAS_BASE);
                 const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
                     const lookupCode = CURRENCY_MAP[moneda] || moneda;
@@ -182,7 +162,7 @@
             }
         }
 
-        // --- LÓGICA DE CÁLCULO DE TASA CRUZADA ---
+        // --- LÓGICA DE CÁLCULO FINAL ---
         let debounceTimeout;
         function calculateConversion(e) {
             if (e) e.preventDefault();
@@ -225,16 +205,9 @@
                      throw new Error(`Tasas base para ${origen} o ${destino} no encontradas o inválidas.`);
                 }
                 
-                let factorGanancia = 1.0; 
-                if (GANANCIA_MATRIX[origenCode] && GANANCIA_MATRIX[origenCode][destinoCode]) {
-                    factorGanancia = parseFloat(GANANCIA_MATRIX[origenCode][destinoCode]);
-                } 
-                if (isNaN(factorGanancia)) factorGanancia = 1.0; 
-                
-                // CALCULAR TASA NETA FINAL
-                const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
-                const tasaNetaFinal = tasaCruzadaSinFactor * factorGanancia;
-
+                // CÁLCULO DE TASA NETA (Sin factor de ganancia externo, asumiendo que ya está en las tasas base)
+                // Fórmula: Tasa Base Destino / Tasa Base Origen
+                const tasaNetaFinal = tasaBaseDestino / tasaBaseOrigen;
                 const montoConvertido = cantidadFloat * tasaNetaFinal;
 
                 displayResult(montoConvertido, tasaNetaFinal, destino);
@@ -280,9 +253,7 @@
         // Función para la hora y fecha localizada (usando Date.now() y zona horaria de Bogotá)
         const formatTimestamp = () => {
             try {
-                // Usamos la hora actual para el timestamp solicitado
                 const date = new Date(Date.now()); 
-
                 // Mostrar fecha y hora en formato de Colombia
                 return date.toLocaleDateString('es-ES', { 
                     day: '2-digit', month: '2-digit', year: 'numeric', 
@@ -302,7 +273,7 @@
             
             const monto = formatter.format(montoConvertido);
             const tasaNetaFormateada = formatTasaNeta(tasaNetaFinal);
-            
+
             // Resultado del Monto
             resultadoMonto.textContent = `${destino} ${monto}`;
             
