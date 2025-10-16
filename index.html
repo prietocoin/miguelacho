@@ -43,7 +43,7 @@
             <div class="flex items-end space-x-4 mb-4">
                 <div class="flex-grow">
                     <label for="cantidad" class="block text-sm font-medium text-gray-400 mb-1">Cantidad a Convertir:</label>
-                    <input type="number" id="cantidad" value="100000" min="0.01" step="0.01" required
+                    <input type="number" id="cantidad" value="100" min="0.01" step="0.01" required
                             class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white">
                 </div>
                 <button type="submit" id="calculate-button"
@@ -127,13 +127,11 @@
 
             // --- REGLA C: Parte entera ≥ 1000 ---
             if (parteEntera >= 1000) {
-                // No incluir decimales (Redondear a la parte entera)
                 return tasa.toFixed(0).toLocaleString('es-ES');
             }
             
             // --- REGLA B: Parte entera de 1 a 999 ---
             if (parteEntera >= 1) {
-                // Redondear a 2 decimales
                 return round(tasa, 2).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
             }
 
@@ -150,8 +148,7 @@
                 }
                 
                 const precision = cerosIniciales + 2; 
-                
-                // Redondeamos y formateamos
+
                 return round(tasa, precision).toLocaleString('es-ES', { minimumFractionDigits: precision, maximumFractionDigits: precision, useGrouping: false }).replace('.', ',');
             }
 
@@ -297,55 +294,56 @@
                      throw new Error(`Tasas base para ${origen} o ${destino} no encontradas o inválidas.`);
                 }
                 
-                let tasaNetaReal; // Tasa con todos los decimales
+                let tasaNetaReal;
                 let montoConvertido;
-
-                // 1. OBTENER FACTOR DE GANANCIA (Buscando inversamente: B->A)
                 let factorAplicado = 1.0; 
-                if (GANANCIA_MATRIX[destinoCode] && GANANCIA_MATRIX[destinoCode][origenCode]) {
-                    factorAplicado = parseFloat(GANANCIA_MATRIX[destinoCode][origenCode]);
-                } 
-                if (isNaN(factorAplicado) || factorAplicado === 0) factorAplicado = 1.0;
-                
-                // --- CÁLCULO DE LA TASA NETA REAL (antes de formatear) ---
+
+                // --- EXCEPCIÓN SOLICITADA: COP a VES (SECUENCIA ESTRICTA) ---
                 if (origen === 'COP' && destino === 'VES') {
                     
+                    // 1. OBTENER FACTOR: Búsqueda inversa [VES][COP]
+                    if (GANANCIA_MATRIX[destinoCode] && GANANCIA_MATRIX[destinoCode][origenCode]) {
+                        factorAplicado = parseFloat(GANANCIA_MATRIX[destinoCode][origenCode]);
+                    } 
+                    if (isNaN(factorAplicado) || factorAplicado === 0) factorAplicado = 1.0;
+
                     if (tasaBaseOrigen === 0 || tasaBaseDestino === 0 || factorAplicado === 0) {
                         throw new Error("División por cero. Una de las tasas o el factor es cero.");
                     }
 
-                    // Tasa Neta Real: 1 / [ (Tasa COP / Tasa VES) / Factor ]
-                    const denominador = (tasaBaseOrigen / tasaBaseDestino) / factorAplicado;
-                    tasaNetaReal = 1.0 / denominador;
+                    // Tasa Neta Real (sin formatear): (Tasa COP / Tasa VES) / Factor
+                    tasaNetaReal = (tasaBaseOrigen / tasaBaseDestino) / factorAplicado;
+
+                    // 1. OBTENEMOS EL VALOR VISUAL (ej: "14,86")
+                    const tasaNetaFormateadaString = formatTasaNeta(tasaNetaReal);
+                    
+                    // 2. CONVERTIMOS EL VALOR VISUAL A NÚMERO USABLE (Cambiando la coma por el punto)
+                    // Esta es la CORRECCIÓN CLAVE.
+                    const tasaNetaParaCalculo = parseFloat(tasaNetaFormateadaString.replace(/\./g, '').replace(',', '.')); 
+                    
+                    const divisorFinal = isNaN(tasaNetaParaCalculo) ? tasaNetaReal : tasaNetaParaCalculo;
+
+                    // 3. Monto = Cantidad / Tasa Neta (Usando el valor numérico corregido)
+                    montoConvertido = cantidadFloat / divisorFinal;
                     
                 } else {
-                    // Tasa Neta Real: (Tasa Destino / Tasa Origen) * Factor (Búsqueda inversa)
-                    const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
-                    tasaNetaReal = tasaCruzadaSinFactor * factorAplicado;
-                }
+                    // --- FÓRMULA ESTÁNDAR (Multiplicación por el factor) ---
+                    
+                    // 1. OBTENER FACTOR: BÚSQUEDA INVERSA [Destino][Origen]
+                    if (GANANCIA_MATRIX[destinoCode] && GANANCIA_MATRIX[destinoCode][origenCode]) {
+                         factorAplicado = parseFloat(GANANCIA_MATRIX[destinoCode][origenCode]);
+                    }
+                    if (isNaN(factorAplicado) || factorAplicado === 0) factorAplicado = 1.0;
+                    
+                    // Tasa Neta Real: (Tasa Destino / Tasa Origen) * Factor
+                    tasaNetaReal = (tasaBaseDestino / tasaBaseOrigen) * factorAplicado;
 
-                // --- APLICACIÓN DE LA REGLA DE COHERENCIA (TRUNCADO) ---
-                // Formateamos la tasa REAL con las reglas para obtener el divisor/multiplicador visual.
-                const tasaNetaFormateadaString = formatTasaNeta(tasaNetaReal);
-                
-                // Convertimos el valor visual (ej: "14,86") a número para el cálculo
-                const tasaNetaParaCalculo = parseFloat(tasaNetaFormateadaString.replace(',', '').replace(/\s/g, '').replace('.', ',')); 
-                
-                // Si la conversión falla, usamos el valor real como respaldo
-                const divisorFinal = isNaN(tasaNetaParaCalculo) ? tasaNetaReal : tasaNetaParaCalculo;
-
-
-                // --- CÁLCULO FINAL DEL MONTO ---
-                if (origen === 'COP' && destino === 'VES') {
-                    // Monto = Cantidad / Tasa Neta (Usamos la tasa formateada como divisor)
-                    montoConvertido = cantidadFloat / divisorFinal;
-                } else {
-                    // Monto = Cantidad * Tasa Neta (Usamos la tasa formateada como multiplicador)
-                    montoConvertido = cantidadFloat * divisorFinal;
+                    // Monto = Cantidad * Tasa Neta Real
+                    montoConvertido = cantidadFloat * tasaNetaReal;
                 }
                 // --------------------------------------------------------------------------
 
-                displayResult(montoConvertido, tasaNetaReal, destino); // Pasamos tasaNetaReal para que formatTasaNeta muestre el valor correcto
+                displayResult(montoConvertido, tasaNetaReal, destino);
 
             } catch (error) {
                 console.error('Error de conversión:', error);
@@ -370,13 +368,11 @@
 
             // --- REGLA C: Parte entera ≥ 1000 ---
             if (parteEntera >= 1000) {
-                // Redondear a la parte entera
                 return tasa.toFixed(0).toLocaleString('es-ES');
             }
             
             // --- REGLA B: Parte entera de 1 a 999 ---
             if (parteEntera >= 1) {
-                // Redondear a 2 decimales
                 return round(tasa, 2).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
             }
 
@@ -394,7 +390,6 @@
                 
                 const precision = cerosIniciales + 2; 
 
-                // Redondeamos y formateamos (toFixed para controlar la precisión de los ceros)
                 return round(tasa, precision).toLocaleString('es-ES', { minimumFractionDigits: precision, maximumFractionDigits: precision, useGrouping: false }).replace('.', ',');
             }
 
