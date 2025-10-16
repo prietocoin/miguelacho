@@ -28,7 +28,7 @@
             <div class="mb-4">
                 <label for="cantidad" class="block text-sm font-medium text-gray-400 mb-1">Cantidad a Convertir:</label>
                 <input type="number" id="cantidad" value="100" min="0.01" step="0.01" required
-                       class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white">
+                        class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white">
             </div>
 
             <div class="grid grid-cols-2 gap-4 mb-6">
@@ -48,7 +48,7 @@
                 </div>
             </div>
 
-            <button type="submit"
+            <button type="submit" id="calculate-button"
                     class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50">
                 Calcular Conversión
             </button>
@@ -58,7 +58,7 @@
             <div id="resultado-card" class="bg-gray-700 p-4 rounded-lg text-center hidden">
                 <p id="resultado-monto" class="text-3xl font-extrabold text-green-400">0.00 COP</p>
                 <div class="text-sm text-gray-400 mt-2">
-                    <p id="detalle-tasa">ID Tasa: N/A | Última Actualización: N/A</p>
+                    <p id="detalle-tasa">Tasa Utilizada: N/A ; ID Moneda Origen: N/A</p>
                 </div>
             </div>
             <p id="error-message" class="text-sm text-red-500 text-center mt-3 hidden">Error al realizar la conversión.</p>
@@ -66,10 +66,20 @@
     </div>
 
     <script>
-        // *** CONFIGURACIÓN CLAVE: URL de la API de Miguelacho (estable en 8081) ***
-        const API_BASE_URL = 'https://calculadoras-miguelacho.eo3pev.easypanel.host';
-        const ENDPOINT_CONVERTIR = `${API_BASE_URL}/convertir`;
-        const ENDPOINT_MATRIZ = `${API_BASE_URL}/matriz_cruce`; // Usamos la API estable para obtener la lista de monedas
+        // *** CONFIGURACIÓN CLAVE: Se actualizó a tu API Maestra de NOCTUS ***
+        const API_BASE_URL = 'https://noctus.jairokov.com';
+        const ENDPOINT_MATRIZ = `${API_BASE_URL}/matriz-ganancia`; 
+        
+        // Monedas que el usuario desea mostrar en la calculadora
+        const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
+        
+        // Mapeo para monedas que usan códigos no ISO (ECU usa USD)
+        const CURRENCY_MAP = {
+            'ECU': 'USD' 
+        };
+
+        // Almacenamiento local de la Matriz de Tasas para el cálculo
+        let CURRENCY_MATRIX = {}; 
         
         // Elementos DOM
         const origenSelect = document.getElementById('origen');
@@ -79,9 +89,13 @@
         const resultadoMonto = document.getElementById('resultado-monto');
         const detalleTasa = document.getElementById('detalle-tasa');
         const errorMessage = document.getElementById('error-message');
+        const calculateButton = document.getElementById('calculate-button');
 
         // --- LÓGICA DE CARGA DE MONEDAS ---
         async function fetchAndFillCurrencies() {
+            calculateButton.textContent = 'Cargando...';
+            calculateButton.disabled = true;
+
             try {
                 // 1. Obtener la Matriz de Cruce
                 const response = await fetch(ENDPOINT_MATRIZ);
@@ -90,41 +104,63 @@
                 const data = await response.json();
                 if (!data || data.length === 0) throw new Error('Matriz vacía.');
 
-                // 2. Extraer los códigos de moneda del primer objeto (encabezados)
-                const availableKeys = Object.keys(data[0]);
+                // 2. Convertir el array de filas de la API en un mapa de objeto para una fácil consulta: 
+                // { 'USD': { 'COP': 3800, ... }, 'COP': {...} }
+                const matrixMap = {};
+                data.forEach(row => {
+                    // ASUNCIÓN: 'Columna0' contiene el código de la moneda de origen (fila)
+                    const sourceCode = row['Columna0']; 
+                    if (sourceCode) {
+                        matrixMap[sourceCode] = row;
+                    }
+                });
+
+                CURRENCY_MATRIX = matrixMap;
+
+                // 3. Filtrar y combinar la lista de monedas
+                const API_MONEDAS_IN_ROWS = Object.keys(CURRENCY_MATRIX);
                 
-                // 3. Filtrar para obtener solo los códigos de moneda válidos (ej: COP, BRL, PEN, etc.)
-                const MONEDAS = availableKeys
-                    .filter(key => key !== '+/-' && key !== 'Columna0' && key !== 'Columna1'); 
+                // Filtramos la lista deseada por el usuario contra las monedas disponibles en las filas de la matriz
+                const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
+                    // Si es una moneda estándar, debe estar en las filas de la matriz O en el mapeo (USD)
+                    const lookupCode = CURRENCY_MAP[moneda] || moneda;
+                    if (API_MONEDAS_IN_ROWS.includes(lookupCode)) return true;
+                    return false;
+                });
                 
-                if (MONEDAS.length === 0) throw new Error('No se encontraron códigos de moneda válidos.');
+                if (finalMonedas.length === 0) throw new Error('No se encontraron códigos de moneda válidos en la matriz.');
 
                 // 4. Llenar los selectores
                 origenSelect.innerHTML = '';
                 destinoSelect.innerHTML = '';
                 
-                MONEDAS.forEach(moneda => {
-                    const optionOrigen = new Option(`${moneda} (${moneda})`, moneda);
-                    const optionDestino = new Option(`${moneda} (${moneda})`, moneda);
+                finalMonedas.forEach(moneda => {
+                    // Mostrar "ECU" como "ECU (Dólar Ecuatoriano)"
+                    const displayText = moneda === 'ECU' ? 'ECU (Dólar Ecuatoriano)' : `${moneda}`;
+                    const optionOrigen = new Option(displayText, moneda);
+                    const optionDestino = new Option(displayText, moneda);
                     origenSelect.add(optionOrigen);
                     destinoSelect.add(optionDestino);
                 });
 
                 // 5. Establecer valores por defecto e iniciar cálculo
-                origenSelect.value = 'USD'; 
-                destinoSelect.value = 'COP'; 
-                handleConversion(new Event('submit')); // Disparar el primer cálculo
-
+                origenSelect.value = 'USD'; // Usamos USD como origen por defecto
+                destinoSelect.value = 'COP'; // Usamos COP como destino por defecto
+                calculateConversion(new Event('submit')); 
+                
             } catch (error) {
                 console.error('Error al cargar la lista de monedas:', error);
                 origenSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
                 destinoSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
                 errorMessage.textContent = `ERROR: No se pudo obtener la lista de monedas. ${error.message}`;
                 errorMessage.classList.remove('hidden');
+            } finally {
+                 calculateButton.textContent = 'Calcular Conversión';
+                 calculateButton.disabled = false;
             }
         }
 
-        // --- LÓGICA DE CÁLCULO Y ENVÍO A LA API ---
+        // --- LÓGICA DE CÁLCULO LOCAL ---
         let debounceTimeout;
         function calculateConversion(e) {
             if (e) e.preventDefault();
@@ -133,7 +169,7 @@
             debounceTimeout = setTimeout(handleConversion, 300);
         }
 
-        async function handleConversion(e) {
+        function handleConversion(e) {
             if (e && e.preventDefault) e.preventDefault();
             
             resultadoCard.classList.add('hidden');
@@ -143,36 +179,74 @@
             const origen = origenSelect.value;
             const destino = destinoSelect.value;
 
-            if (!cantidad || !origen || !destino) return;
-
-            const url = `${ENDPOINT_CONVERTIR}?cantidad=${cantidad}&origen=${origen}&destino=${destino}`;
+            if (!cantidad || !origen || !destino || !Object.keys(CURRENCY_MATRIX).length) {
+                if (Object.keys(CURRENCY_MATRIX).length) {
+                    errorMessage.textContent = 'Faltan campos por completar.';
+                    errorMessage.classList.remove('hidden');
+                }
+                return;
+            }
 
             try {
-                const response = await fetch(url);
-                const data = await response.json();
+                // 1. Determinar el código real para la consulta en la matriz (mapea ECU a USD)
+                const origenCode = CURRENCY_MAP[origen] || origen;
+                const destinoCode = CURRENCY_MAP[destino] || destino;
 
-                if (response.ok && data.status === 'success') {
-                    // Formato de número con separador decimal ','
-                    const formatter = new Intl.NumberFormat('es-ES', { 
-                        minimumFractionDigits: 2, 
-                        maximumFractionDigits: 4 
-                    });
-                    
-                    const monto = formatter.format(data.monto_convertido);
-                    const monedaDestino = destino;
-                    
-                    resultadoMonto.textContent = `${monedaDestino} ${monto}`;
-                    detalleTasa.innerHTML = `ID Tasa: ${data.detalle.id_tasa_actual}; Factor: ${data.detalle.factor_ganancia}`;
-                    resultadoCard.classList.remove('hidden');
-                } else {
-                    // Muestra el error específico que viene del backend
-                    throw new Error(data.error || 'Respuesta de API inválida.');
+                const cantidadFloat = parseFloat(cantidad);
+
+                if (origenCode === destinoCode) {
+                    // Conversión a sí misma es 1:1
+                    displayResult(cantidadFloat, 1, origenCode, destino);
+                    return;
                 }
+
+                // 2. Buscar la tasa de conversión en la matriz
+                const origenRow = CURRENCY_MATRIX[origenCode];
+
+                if (!origenRow) {
+                    throw new Error(`Fila de tasa para ${origenCode} no encontrada.`);
+                }
+                
+                // ASUNCIÓN: La tasa es el valor en la columna de la moneda de destino
+                let tasa = origenRow[destinoCode]; 
+
+                if (tasa === undefined || tasa === null || isNaN(parseFloat(tasa))) {
+                    throw new Error(`Tasa de ${origen} a ${destino} no disponible en la matriz.`);
+                }
+
+                tasa = parseFloat(tasa);
+
+                // 3. Realizar el cálculo local
+                const montoConvertido = cantidadFloat * tasa;
+
+                // 4. Mostrar el resultado
+                displayResult(montoConvertido, tasa, origenRow['Columna1'], destino);
+
             } catch (error) {
                 console.error('Error de conversión:', error);
-                errorMessage.textContent = `Error de conversión: ${error.message}. Intente de nuevo.`;
+                errorMessage.textContent = `Error de cálculo: ${error.message}`;
                 errorMessage.classList.remove('hidden');
             }
+        }
+        
+        // Función para mostrar el resultado y detalles
+        function displayResult(montoConvertido, tasa, idTasa, destino) {
+            // Formato de número con separador decimal ',' (usando la preferencia del usuario ';')
+            const formatter = new Intl.NumberFormat('es-ES', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 4 
+            });
+            
+            const monto = formatter.format(montoConvertido);
+            const monedaDestinoDisplay = destino;
+            
+            // Usamos la tasa encontrada y un identificador genérico de la fila
+            resultadoMonto.textContent = `${monedaDestinoDisplay} ${monto}`;
+            
+            // Usamos el separador de elementos ';' solicitado por el usuario
+            detalleTasa.innerHTML = `Tasa Utilizada: ${tasa.toFixed(6)} ; ID Moneda Origen (Columna1): ${idTasa || 'N/A'}`;
+            
+            resultadoCard.classList.remove('hidden');
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -187,4 +261,3 @@
     </script>
 </body>
 </html>
-```eof
