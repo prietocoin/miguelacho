@@ -15,7 +15,7 @@
 
     <div class="card w-full max-w-md bg-gray-800 p-6 sm:p-8 rounded-xl text-white">
         <div class="text-center mb-6">
-            <img src="https://placehold.co/60x60/161b22/8b949e?text=💰" alt="Logo" class="mx-auto rounded-full bg-gray-900 p-2 mb-2">
+            <img src="./Miguelacho.jpeg" alt="Logo de Cambios Miguelacho" class="mx-auto h-16 w-16 rounded-full bg-gray-900 p-2 mb-2 object-cover">
             <h2 class="text-xl font-extrabold text-white">CAMBIOS MIGUELACHO</h2>
             <p class="text-sm text-yellow-500">Servicio de Divisas API</p>
         </div>
@@ -58,7 +58,8 @@
             <div id="resultado-card" class="bg-gray-700 p-4 rounded-lg text-center hidden">
                 <p id="resultado-monto" class="text-3xl font-extrabold text-green-400">0.00 COP</p>
                 <div class="text-sm text-gray-400 mt-2">
-                    <p id="detalle-tasa">Tasa Neta: N/A ; Última Actualización: N/A</p>
+                    <p id="detalle-tasa">Tasa Neta: N/A</p>
+                    <p id="detalle-fecha" class="mt-1 text-xs">Última Actualización: N/A</p>
                 </div>
             </div>
             <p id="error-message" class="text-sm text-red-500 text-center mt-3 hidden">Error al realizar la conversión.</p>
@@ -66,7 +67,6 @@
     </div>
 
     <script>
-        // *** CONFIGURACIÓN CLAVE: APIs de NOCTUS ***
         const API_BASE_URL = 'https://noctus.jairokov.com';
         const ENDPOINT_MATRIZ_GANANCIA = `${API_BASE_URL}/matriz-ganancia`; 
         const ENDPOINT_TASAS_BASE = `${API_BASE_URL}/tasas-promedio`; 
@@ -74,7 +74,7 @@
         const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
         const CURRENCY_MAP = { 'ECU': 'USD' };
 
-        // 1. Mapeo de nombres para mostrar en el resultado (corregido)
+        // Mapeo de nombres para la visualización
         const CURRENCY_NAMES = {
             'COP': 'Peso Colombiano',
             'BRL': 'Real Brasileño',
@@ -93,13 +93,14 @@
         let GANANCIA_MATRIX = {}; 
         let TIMESTAMP_DATA = 'N/A'; 
         
-        // Elementos DOM 
+        // Elementos DOM
         const origenSelect = document.getElementById('origen');
         const destinoSelect = document.getElementById('destino');
         const form = document.getElementById('conversion-form');
         const resultadoCard = document.getElementById('resultado-card');
         const resultadoMonto = document.getElementById('resultado-monto');
         const detalleTasa = document.getElementById('detalle-tasa');
+        const detalleFecha = document.getElementById('detalle-fecha'); 
         const errorMessage = document.getElementById('error-message');
         const calculateButton = document.getElementById('calculate-button'); 
 
@@ -149,7 +150,6 @@
 
                 // 4. Llenar Selectores 
                 const API_MONEDAS_DISPONIBLES = Object.keys(TASAS_BASE);
-                
                 const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
                     const lookupCode = CURRENCY_MAP[moneda] || moneda;
                     return API_MONEDAS_DISPONIBLES.includes(lookupCode);
@@ -161,7 +161,6 @@
                 destinoSelect.innerHTML = '';
                 
                 finalMonedas.forEach(moneda => {
-                    // Usamos el código de moneda y el nombre completo en el selector
                     const displayText = `${moneda} (${CURRENCY_NAMES[moneda]})`;
                     const optionOrigen = new Option(displayText, moneda);
                     const optionDestino = new Option(displayText, moneda);
@@ -169,7 +168,6 @@
                     destinoSelect.add(optionDestino);
                 });
 
-                // Valores por defecto e inicio de cálculo
                 origenSelect.value = 'USD'; 
                 destinoSelect.value = 'COP'; 
                 calculateConversion(new Event('submit')); 
@@ -222,7 +220,6 @@
                     return;
                 }
                 
-                // 1. OBTENER TASAS BASE 
                 const tasaBaseOrigen = TASAS_BASE[origenCode];
                 const tasaBaseDestino = TASAS_BASE[destinoCode];
 
@@ -230,18 +227,16 @@
                      throw new Error(`Tasas base para ${origen} o ${destino} no encontradas o inválidas.`);
                 }
                 
-                // 2. OBTENER FACTOR DE GANANCIA
                 let factorGanancia = 1.0; 
                 if (GANANCIA_MATRIX[origenCode] && GANANCIA_MATRIX[origenCode][destinoCode]) {
                     factorGanancia = parseFloat(GANANCIA_MATRIX[origenCode][destinoCode]);
                 } 
                 if (isNaN(factorGanancia)) factorGanancia = 1.0; 
                 
-                // 3. CALCULAR TASA NETA FINAL: (Tasa Destino / Tasa Origen) * Factor de Ganancia
+                // CALCULAR TASA NETA FINAL: (Tasa Destino / Tasa Origen) * Factor de Ganancia
                 const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
                 const tasaNetaFinal = tasaCruzadaSinFactor * factorGanancia;
 
-                // 4. CÁLCULO FINAL: Cantidad * Tasa Neta Final
                 const montoConvertido = cantidadFloat * tasaNetaFinal;
 
                 displayResult(montoConvertido, tasaNetaFinal, destino);
@@ -253,33 +248,65 @@
             }
         }
         
-        // Función para el nuevo formato inteligente de decimales
+        // Función para el formato inteligente de decimales de la Tasa Neta
         function formatTasaNeta(tasa) {
-            if (tasa >= 1 || tasa === 0) {
-                // Si es mayor o igual a 1, mostrar 6 decimales fijos (o 2 si lo prefieres)
-                return tasa.toFixed(6); 
-            } else {
-                // Si es menor a 1 (ej. 0.00017055)
-                const tasaStr = tasa.toFixed(10); // Aseguramos alta precisión para encontrar la primera cifra
-                let firstDigitIndex = 0;
+            const absTasa = Math.abs(tasa);
+            
+            if (absTasa >= 1) {
+                // Regla 1: Si es mayor o igual a 1, mostrar 2 decimales
+                return tasa.toFixed(2); 
+            } else if (absTasa > 0) {
+                // Regla 2: Si es menor a 1 y mayor a 0, mostrar decimales hasta la tercera cifra significativa
+                
+                const tasaStr = absTasa.toFixed(10); 
+                let firstSignificantIndex = -1;
 
-                // Encontrar la primera cifra distinta de cero después del punto
+                // Encontrar el índice del primer dígito significativo (distinto de cero)
                 for (let i = 2; i < tasaStr.length; i++) {
                     if (tasaStr[i] !== '0' && tasaStr[i] !== '.') {
-                        firstDigitIndex = i;
+                        firstSignificantIndex = i;
                         break;
                     }
                 }
                 
-                // Mostrar 3 cifras significativas (desde la primera cifra distinta de cero)
-                // Posición total de decimales a mostrar (índice - 2 + 3)
-                const decimalPlaces = firstDigitIndex - 2 + 3; 
-
-                // Usamos toPrecision(3) para las cifras significativas si la Tasa es muy pequeña, 
-                // pero lo ajustamos para que funcione con toFixed (índice + 3)
-                return tasa.toFixed(decimalPlaces);
+                if (firstSignificantIndex !== -1) {
+                    // Calculamos los decimales necesarios para incluir 3 cifras significativas
+                    const decimalPlaces = firstSignificantIndex - 2 + 3; 
+                    return tasa.toFixed(decimalPlaces);
+                } else {
+                    // Si la tasa es 0.000... (muy pequeña), usamos 6 decimales por defecto
+                    return tasa.toFixed(6);
+                }
+            } else {
+                return '0.00';
             }
         }
+
+        // Función para la hora y fecha localizada
+        const formatTimestamp = (timestamp) => {
+            if (!timestamp || timestamp === 'N/A') return 'N/A';
+            try {
+                let date;
+                if (typeof timestamp === 'number' && timestamp > 10000000000) {
+                    date = new Date(timestamp); 
+                } else if (typeof timestamp === 'number') {
+                    date = new Date(timestamp * 1000); 
+                } else {
+                    date = new Date(timestamp); 
+                }
+
+                if (isNaN(date.getTime())) return String(timestamp); 
+
+                // Mostrar fecha y hora en formato de Colombia
+                return date.toLocaleDateString('es-ES', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric', 
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    timeZone: 'America/Bogota' // Zona horaria de Colombia
+                }) + ' (Hora Colombia)';
+            } catch (e) {
+                return String(timestamp);
+            }
+        };
 
         function displayResult(montoConvertido, tasaNetaFinal, destino) {
             const formatter = new Intl.NumberFormat('es-ES', { 
@@ -288,41 +315,17 @@
             });
             
             const monto = formatter.format(montoConvertido);
-            
-            // 1. Mostrar nombre de la moneda + código
-            const monedaDestinoDisplay = `${destino} (${CURRENCY_NAMES[destino]})`;
-            
-            // 2. Formato decimal inteligente para la Tasa Neta
             const tasaNetaFormateada = formatTasaNeta(tasaNetaFinal);
+            const fechaActualizacion = formatTimestamp(TIMESTAMP_DATA);
 
-            const formatTimestamp = (timestamp) => {
-                if (!timestamp || timestamp === 'N/A') return 'N/A';
-                try {
-                    // Intenta parsear el timestamp asumiendo milisegundos si es un número grande, o segundos
-                    let date;
-                    if (typeof timestamp === 'number' && timestamp > 10000000000) {
-                        date = new Date(timestamp); // Milisegundos
-                    } else if (typeof timestamp === 'number') {
-                        date = new Date(timestamp * 1000); // Segundos
-                    } else {
-                        date = new Date(timestamp); // String
-                    }
-
-                    if (isNaN(date.getTime())) return String(timestamp); 
-
-                    return date.toLocaleDateString('es-ES', { 
-                        day: '2-digit', month: '2-digit', year: 'numeric', 
-                        hour: '2-digit', minute: '2-digit', second: '2-digit' 
-                    });
-                } catch (e) {
-                    return String(timestamp);
-                }
-            };
-
+            // Resultado del Monto
             resultadoMonto.textContent = `${destino} ${monto}`;
             
-            // Tasa Neta: Valor de la tasa de conversión final
-            detalleTasa.innerHTML = `Tasa Neta: ${tasaNetaFormateada} ; Última Actualización: ${formatTimestamp(TIMESTAMP_DATA)}`;
+            // Tasa Neta
+            detalleTasa.textContent = `Tasa Neta: ${tasaNetaFormateada}`;
+            
+            // Última Actualización (en la segunda línea)
+            detalleFecha.textContent = `Última Actualización: ${fechaActualizacion}`;
             
             resultadoCard.classList.remove('hidden');
         }
