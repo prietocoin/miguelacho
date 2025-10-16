@@ -58,7 +58,7 @@
             <div id="resultado-card" class="bg-gray-700 p-4 rounded-lg text-center hidden">
                 <p id="resultado-monto" class="text-3xl font-extrabold text-green-400">0.00 COP</p>
                 <div class="text-sm text-gray-400 mt-2">
-                    <p id="detalle-tasa">Tasa Utilizada: N/A ; Factor de Ganancia: N/A</p>
+                    <p id="detalle-tasa">Tasa Base: N/A ; Factor de Ganancia: N/A</p>
                 </div>
             </div>
             <p id="error-message" class="text-sm text-red-500 text-center mt-3 hidden">Error al realizar la conversión.</p>
@@ -66,20 +66,22 @@
     </div>
 
     <script>
-        // *** CONFIGURACIÓN CLAVE: API Maestra de NOCTUS ***
+        // *** CONFIGURACIÓN CLAVE: APIs de NOCTUS ***
         const API_BASE_URL = 'https://noctus.jairokov.com';
-        const ENDPOINT_MATRIZ = `${API_BASE_URL}/matriz-ganancia`; 
+        const ENDPOINT_MATRIZ_GANANCIA = `${API_BASE_URL}/matriz-ganancia`; 
+        const ENDPOINT_TASAS_BASE = `${API_BASE_URL}/tasas-promedio`; // Nuevo endpoint para tasas base
         
         // Monedas solicitadas
         const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
         
-        // Mapeo (ECU se mapea a USD para la búsqueda en la matriz)
+        // Mapeo (ECU se mapea a USD para el cálculo)
         const CURRENCY_MAP = {
             'ECU': 'USD' 
         };
 
-        // Almacenamiento local de la Matriz de Tasas
-        let CURRENCY_MATRIX = {}; 
+        // Almacenamiento local de los datos
+        let TASAS_BASE = {}; // Para las tasas como USD: 1.00, COP: 3890
+        let GANANCIA_MATRIX = {}; // Para obtener el factor de ganancia (ej. 0.88)
         
         // Elementos DOM 
         const origenSelect = document.getElementById('origen');
@@ -91,30 +93,55 @@
         const errorMessage = document.getElementById('error-message');
         const calculateButton = document.getElementById('calculate-button'); 
 
-        // --- LÓGICA DE CARGA DE MONEDAS ---
+        // --- LÓGICA DE CARGA DE MONEDAS Y TASAS ---
         async function fetchAndFillCurrencies() {
             calculateButton.textContent = 'Cargando...';
             calculateButton.disabled = true;
 
             try {
-                const response = await fetch(ENDPOINT_MATRIZ);
-                if (!response.ok) throw new Error('No se pudo cargar la matriz de la API.');
-                
-                const data = await response.json();
-                if (!data || data.length === 0) throw new Error('Matriz vacía.');
+                // 1. Obtener la Matriz de Ganancia (para factores)
+                const [respGanancia, respTasas] = await Promise.all([
+                    fetch(ENDPOINT_MATRIZ_GANANCIA),
+                    fetch(ENDPOINT_TASAS_BASE)
+                ]);
 
+                if (!respGanancia.ok) throw new Error('No se pudo cargar la matriz de ganancia.');
+                if (!respTasas.ok) throw new Error('No se pudieron cargar las tasas base.');
+                
+                const dataGanancia = await respGanancia.json();
+                const dataTasas = await respTasas.json();
+
+                // 2. Procesar Matriz de Ganancia
                 const matrixMap = {};
-                data.forEach(row => {
-                    // CORRECCIÓN: Usamos la clave vacía ("") para obtener el código de moneda de la fila
+                dataGanancia.forEach(row => {
                     const sourceCode = row[""]; 
                     if (sourceCode) {
                         matrixMap[sourceCode] = row;
                     }
                 });
+                GANANCIA_MATRIX = matrixMap;
 
-                CURRENCY_MATRIX = matrixMap;
+                // 3. Procesar Tasas Base
+                if (dataTasas.length === 0) throw new Error('Tasas base vacías.');
+                // ASUNCIÓN: El JSON de tasas base es un array con UN objeto { "COP": "3890", "USD": "1.00", ... }
+                // La imagen sugiere un objeto con claves de moneda
+                TASAS_BASE = {};
+                if (Array.isArray(dataTasas) && dataTasas.length > 0) {
+                     // Si es un array con un objeto, tomamos el primer objeto
+                    const tasasObj = dataTasas[0];
+                    for (const key in tasasObj) {
+                         // Convertimos los valores a float, ya que vienen como strings
+                         TASAS_BASE[key] = parseFloat(tasasObj[key]);
+                    }
+                } else if (typeof dataTasas === 'object' && dataTasas !== null) {
+                    // Si es solo un objeto (como sugiere la imagen)
+                    for (const key in dataTasas) {
+                         TASAS_BASE[key] = parseFloat(dataTasas[key]);
+                    }
+                }
 
-                const API_MONEDAS_DISPONIBLES = Object.keys(CURRENCY_MATRIX);
+                // 4. Llenar Selectores (usamos las claves de las tasas base)
+                const API_MONEDAS_DISPONIBLES = Object.keys(TASAS_BASE);
                 
                 const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
                     const lookupCode = CURRENCY_MAP[moneda] || moneda;
@@ -140,10 +167,10 @@
                 calculateConversion(new Event('submit')); 
                 
             } catch (error) {
-                console.error('Error al cargar la lista de monedas:', error);
-                origenSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
-                destinoSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
-                errorMessage.textContent = `ERROR: No se pudo obtener la lista de monedas. ${error.message}`;
+                console.error('Error al cargar la lista de monedas o tasas:', error);
+                origenSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique las APIs</option>`;
+                destinoSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique las APIs</option>`;
+                errorMessage.textContent = `ERROR: No se pudieron obtener las tasas. ${error.message}`;
                 errorMessage.classList.remove('hidden');
             } finally {
                  calculateButton.textContent = 'Calcular Conversión';
@@ -151,7 +178,7 @@
             }
         }
 
-        // --- LÓGICA DE CÁLCULO LOCAL ---
+        // --- LÓGICA DE CÁLCULO DE TASA CRUZADA ---
         let debounceTimeout;
         function calculateConversion(e) {
             if (e) e.preventDefault();
@@ -169,8 +196,8 @@
             const origen = origenSelect.value;
             const destino = destinoSelect.value;
 
-            if (!cantidad || !origen || !destino || !Object.keys(CURRENCY_MATRIX).length) {
-                if (Object.keys(CURRENCY_MATRIX).length) {
+            if (!cantidad || !origen || !destino || !Object.keys(TASAS_BASE).length) {
+                if (Object.keys(TASAS_BASE).length) {
                     errorMessage.textContent = 'Faltan campos por completar.';
                     errorMessage.classList.remove('hidden');
                 }
@@ -183,28 +210,36 @@
                 const cantidadFloat = parseFloat(cantidad);
 
                 if (origenCode === destinoCode) {
-                    displayResult(cantidadFloat, 1, destino);
+                    displayResult(cantidadFloat, 1, 1, destino);
                     return;
                 }
+                
+                // 1. OBTENER TASAS BASE (ej. USD/USD = 1, COP/USD = 3890)
+                const tasaBaseOrigen = TASAS_BASE[origenCode];
+                const tasaBaseDestino = TASAS_BASE[destinoCode];
 
-                const origenRow = CURRENCY_MATRIX[origenCode];
-
-                if (!origenRow) {
-                    throw new Error(`Fila de tasa para ${origenCode} no encontrada en la matriz.`);
+                if (tasaBaseOrigen === undefined || tasaBaseDestino === undefined || tasaBaseOrigen === 0) {
+                     throw new Error(`Tasas base para ${origen} o ${destino} no encontradas o inválidas.`);
                 }
                 
-                let tasa = origenRow[destinoCode]; 
+                // 2. CALCULAR TASA CRUZADA: (Tasa Destino / Tasa Origen)
+                const tasaNetaCruzada = tasaBaseDestino / tasaBaseOrigen;
+                
+                // 3. OBTENER FACTOR DE GANANCIA (de la matriz)
+                // Usamos la matriz de ganancia para obtener el factor que aplicaremos
+                let factorGanancia = 1.0; 
+                if (GANANCIA_MATRIX[origenCode] && GANANCIA_MATRIX[origenCode][destinoCode]) {
+                    // Si el valor está en la matriz, lo usamos.
+                    factorGanancia = parseFloat(GANANCIA_MATRIX[origenCode][destinoCode]);
+                } 
 
-                if (tasa === undefined || tasa === null || isNaN(parseFloat(tasa))) {
-                    throw new Error(`Tasa de ${origen} a ${destino} no disponible en la matriz.`);
-                }
+                if (isNaN(factorGanancia)) factorGanancia = 1.0; // Evita NaN si el valor de la matriz es inválido
+                
+                // 4. FÓRMULA FINAL: Cantidad * Tasa Cruzada * Factor de Ganancia
+                const montoConvertido = cantidadFloat * tasaNetaCruzada * factorGanancia;
 
-                tasa = parseFloat(tasa);
-
-                // FÓRMULA FINAL: MULTIPLICACIÓN (La tasa de la matriz ya incluye el factor de ganancia)
-                const montoConvertido = cantidadFloat * tasa;
-
-                displayResult(montoConvertido, tasa, destino);
+                // Para los detalles, mostramos la Tasa Neta y el Factor de Ganancia
+                displayResult(montoConvertido, tasaNetaCruzada, factorGanancia, destino);
 
             } catch (error) {
                 console.error('Error de conversión:', error);
@@ -213,18 +248,18 @@
             }
         }
         
-        function displayResult(montoConvertido, tasa, destino) {
+        function displayResult(montoConvertido, tasaNeta, factorGanancia, destino) {
             const formatter = new Intl.NumberFormat('es-ES', { 
                 minimumFractionDigits: 2, 
-                maximumFractionDigits: 4 
+                maximumFractionDigits: 2 // Mostramos solo 2 decimales para el monto final
             });
             
             const monto = formatter.format(montoConvertido);
             const monedaDestinoDisplay = destino;
             
-            // Usando el separador de elementos ';' solicitado por el usuario
             resultadoMonto.textContent = `${monedaDestinoDisplay} ${monto}`;
-            detalleTasa.innerHTML = `Factor de Ganancia: ${tasa.toFixed(6)} ; Tasa: ${tasa.toFixed(6)}`;
+            // Usando el separador de elementos ';' solicitado por el usuario
+            detalleTasa.innerHTML = `Tasa Neta: ${tasaNeta.toFixed(4)} ; Factor de Ganancia: ${factorGanancia.toFixed(6)}`;
             
             resultadoCard.classList.remove('hidden');
         }
