@@ -11,10 +11,6 @@ const MAIN_SHEET_NAME = 'Mercado'; 
 const RANGO_TASAS = 'A1:AL999'; 
 const RANGO_MATRIZ_CRUCE = 'AN1:BD17'; // Rango donde está la Matriz de Ganancia/Cruce
 
-// --- MATRIZ DE FACTORES DE GANANCIA FIJA (Puedes cargarlo de Sheets si es necesario) ---
-// NOTA: Para estabilidad inicial, usaremos la matriz fija, o se cargará de Sheets
-// usando el RANGO_MATRIZ_CRUCE. Si tu lógica es leerla de Sheets en cada peticion:
-
 // Convierte cadena con coma decimal a número (ej. "0,93" -> 0.93)
 function parseFactor(factorString) {
     if (typeof factorString !== 'string') return 1.0;
