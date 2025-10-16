@@ -326,7 +326,7 @@ app.get('/convertir', async (req, res) => {
 
 // --- INICIO DEL SERVIDOR ---
 app.listen(PORT, () => {
-    console.log(`Servidor de NOCTUS API escuchando en el puerto: ${PORT}`);
+    console.log(`Servidor de Miguelacho API escuchando en el puerto: ${PORT}`);
     console.log(`Acceso API de prueba: http://localhost:${PORT}/`);
     // Agregamos un manejador básico de SIGTERM por si acaso (aunque la ejecución directa ayuda más)
     process.on('SIGTERM', () => {
@@ -334,3 +334,4 @@ app.listen(PORT, () => {
         process.exit(0);
     });
 });
+
