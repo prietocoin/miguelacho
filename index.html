@@ -313,34 +313,35 @@
                     }
 
                     // Tasa Neta Real: 1 / [ (Tasa COP / Tasa VES) / Factor ]
-                    const denominador = (tasaBaseOrigen / tasaBaseDestino) / factorAplicado;
-                    tasaNetaReal = 1.0 / denominador;
+                    tasaNetaReal = (tasaBaseOrigen / tasaBaseDestino) / factorAplicado;
+                    
+                    // 1. OBTENEMOS EL VALOR VISUAL FORMATEADO (STRING)
+                    const tasaNetaFormateadaString = formatTasaNeta(tasaNetaReal);
+                    
+                    // 2. CONVERTIMOS EL VALOR VISUAL A NÚMERO USABLE (Coherencia Estricta)
+                    const tasaNetaParaCalculo = parseFloat(tasaNetaFormateadaString.replace(/\./g, '').replace(',', '.')); 
+                    
+                    const divisorFinal = isNaN(tasaNetaParaCalculo) ? tasaNetaReal : tasaNetaParaCalculo;
+
+                    // 3. Monto = Cantidad / Tasa Neta (Usando el valor numérico corregido)
+                    montoConvertido = cantidadFloat / divisorFinal;
                     
                 } else {
+                    // --- FÓRMULA ESTÁNDAR (TODOS LOS DEMÁS PARES) ---
+                    
                     // Tasa Neta Real: (Tasa Destino / Tasa Origen) * Factor (Inverso)
-                    const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
-                    tasaNetaReal = tasaCruzadaSinFactor * factorAplicado;
-                }
+                    tasaNetaReal = (tasaBaseDestino / tasaBaseOrigen) * factorAplicado;
 
-                // --- APLICACIÓN DE LA REGLA DE COHERENCIA EN EL CÁLCULO FINAL ---
-                
-                // 1. OBTENEMOS EL VALOR VISUAL FORMATEADO (STRING)
-                const tasaNetaFormateadaString = formatTasaNeta(tasaNetaReal);
-                
-                // 2. CONVERTIMOS EL VALOR VISUAL A NÚMERO USABLE (Cambiando la coma por el punto para cálculo)
-                // Esta es la corrección clave para que 0,268 se use como 0.268.
-                // Se eliminan los puntos de miles (si existen) y se cambia la coma decimal por punto.
-                const tasaNetaParaCalculo = parseFloat(tasaNetaFormateadaString.replace(/\./g, '').replace(',', '.')); 
-                
-                const divisorMultiplicadorFinal = isNaN(tasaNetaParaCalculo) ? tasaNetaReal : tasaNetaParaCalculo;
-
-                // 3. CÁLCULO FINAL DEL MONTO
-                if (origen === 'COP' && destino === 'VES') {
-                    // EXCEPCIÓN: Monto = Cantidad / Tasa Neta
-                    montoConvertido = cantidadFloat / divisorMultiplicadorFinal;
-                } else {
-                    // ESTÁNDAR: Monto = Cantidad * Tasa Neta
-                    montoConvertido = cantidadFloat * divisorMultiplicadorFinal;
+                    // 1. OBTENEMOS EL VALOR VISUAL FORMATEADO (STRING)
+                    const tasaNetaFormateadaString = formatTasaNeta(tasaNetaReal);
+                    
+                    // 2. CONVERTIMOS EL VALOR VISUAL A NÚMERO USABLE (Coherencia Estricta)
+                    const tasaNetaParaCalculo = parseFloat(tasaNetaFormateadaString.replace(/\./g, '').replace(',', '.')); 
+                    
+                    const multiplicadorFinal = isNaN(tasaNetaParaCalculo) ? tasaNetaReal : tasaNetaParaCalculo;
+                    
+                    // Monto = Cantidad * Tasa Neta (Usando el valor numérico corregido)
+                    montoConvertido = cantidadFloat * multiplicadorFinal;
                 }
                 // --------------------------------------------------------------------------
 
