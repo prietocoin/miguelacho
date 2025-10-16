@@ -6,7 +6,7 @@
     // Monedas que el usuario desea mostrar en la calculadora
     const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
     
-    // Mapeo para monedas que usan códigos no ISO (ECU usa USD)
+    // Mapeo para monedas que usan códigos no ISO (ECU usa USD para el cálculo)
     const CURRENCY_MAP = {
         'ECU': 'USD' 
     };
@@ -14,7 +14,7 @@
     // Almacenamiento local de la Matriz de Tasas para el cálculo
     let CURRENCY_MATRIX = {}; 
     
-    // Elementos DOM
+    // Elementos DOM (Asegúrate de que los IDs existan en tu HTML)
     const origenSelect = document.getElementById('origen');
     const destinoSelect = document.getElementById('destino');
     const form = document.getElementById('conversion-form');
@@ -22,7 +22,7 @@
     const resultadoMonto = document.getElementById('resultado-monto');
     const detalleTasa = document.getElementById('detalle-tasa');
     const errorMessage = document.getElementById('error-message');
-    const calculateButton = document.getElementById('calculate-button');
+    const calculateButton = document.getElementById('calculate-button'); // Elemento que fallaba
 
     // --- LÓGICA DE CARGA DE MONEDAS ---
     async function fetchAndFillCurrencies() {
@@ -146,7 +146,7 @@
             tasa = parseFloat(tasa);
 
             // 3. Realizar el cálculo local
-            // *** CORRECCIÓN: Usamos MULTIPLICACIÓN según tu confirmación ***
+            // *** FÓRMULA FINAL: MULTIPLICACIÓN ***
             const montoConvertido = cantidadFloat * tasa;
 
             // 4. Mostrar el resultado
@@ -179,6 +179,8 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         fetchAndFillCurrencies();
+        
+        // El formulario ya tiene los IDs de los elementos DOM, por lo que este bloque funcionará.
         form.addEventListener('submit', handleConversion);
 
         // Escucha cambios para calcular automáticamente
