@@ -3,7 +3,7 @@ const { google } = require('googleapis'); 
 const app = express();
 
 // --- CONFIGURACIÓN DE ENTORNO ---
-const PORT = process.env.PORT || 8081; // Usamos 8081 para evitar conflicto con Nginx
+const PORT =  8081; // Usamos 8081 para evitar conflicto con Nginx
 const CREDENTIALS_PATH = '/workspace/credentials.json'; 
 // NOTA: Reemplaza este ID por el ID de tu hoja de cálculo real
 const SPREADSHEET_ID = '1jv-wydSjH84MLUtj-zRvHsxUlpEiqe5AlkTkr6K2248'; 
@@ -201,3 +201,4 @@ process.on('SIGTERM', () => {
         process.exit(1); 
     }, 10000); 
 });
+
