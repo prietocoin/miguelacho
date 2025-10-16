@@ -258,20 +258,21 @@
                 let tasaNetaFinal;
                 let montoConvertido;
 
-                // --- EXCEPCIÓN SOLICITADA: COP a VES (DIVISIÓN TRIPLE) ---
+                // --- EXCEPCIÓN SOLICITADA: COP a VES (SECUENCIA ESTRICTA) ---
                 if (origen === 'COP' && destino === 'VES') {
                     
                     if (tasaBaseOrigen === 0 || tasaBaseDestino === 0 || factorAplicado === 0) {
                         throw new Error("División por cero. Una de las tasas o el factor es cero.");
                     }
 
-                    // FÓRMULA VALIDADA: Monto = Cantidad / ( (Tasa COP / Tasa VES) / Factor )
-                    const denominador = (tasaBaseOrigen / tasaBaseDestino) / factorAplicado;
+                    // PASO 1: COP / VES
+                    let result_temp = tasaBaseOrigen / tasaBaseDestino; 
 
-                    montoConvertido = cantidadFloat / denominador;
-                    
-                    // Tasa Neta equivalente para mostrar en los detalles
-                    tasaNetaFinal = 1.0 / denominador;
+                    // PASO 2: result / Factor (Esta es la Tasa Neta final)
+                    tasaNetaFinal = result_temp / factorAplicado;
+
+                    // PASO 3: Cantidad / result (Tasa Neta)
+                    montoConvertido = cantidadFloat / tasaNetaFinal;
                     
                 } else {
                     // --- FÓRMULA ESTÁNDAR (Multiplicación por el factor) ---
