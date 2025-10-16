@@ -18,5 +18,5 @@ COPY . .
 # Usaremos el puerto 8080 como fallback, aunque la aplicación usará process.env.PORT
 EXPOSE 8080
 
-# Comando de inicio: ejecuta el script 'start' de package.json
-CMD [ "npm", "start" ]
+# --- LÍNEA DE SOLUCIÓN: Ejecuta Node directamente en lugar de 'npm start' ---
+CMD [ "node", "index.js" ]
