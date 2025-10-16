@@ -3,284 +3,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculadora de Divisas - Cambios Miguelacho</title>
+    <title>CAMBIOS MIGUELACHO | Calculadora</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        /* ESTILOS GLOBALES */
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 10px; 
-            
-            /* AJUSTE CLAVE PARA CENTRADO VERTICAL */
-            display: flex;
-            flex-direction: column;
-            align-items: center; /* Centra horizontalmente */
-            justify-content: center; /* <--- CENTRA VERTICALMENTE */
-            min-height: 100vh;
-        }
-        /* ENCABEZADO Y MARCA */
-        .header-branding {
-            text-align: center;
-            margin-bottom: 10px; 
-        }
-        .header-branding img {
-            max-width: 65px; 
-            height: auto;
-            margin-bottom: 5px; 
-            border-radius: 50%;
-        }
-        .header-branding .brand-name {
-            font-size: 1.7em; 
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 2px; 
-        }
-        /* CONTENEDOR PRINCIPAL - ALTURA Y ANCHO */
-        .container {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 350px; 
-            box-sizing: border-box;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-top: 0;
-            font-size: 1.4em; 
-            margin-bottom: 10px;
-        }
-        /* CAMPOS DE ENTRADA */
-        label {
-            display: block;
-            margin-bottom: 3px; 
-            color: #555;
-            font-size: 0.85em;
-        }
-        input[type="number"], select {
-            width: 100%; /* Corregido para ocupar todo el ancho */
-            padding: 7px; 
-            margin-bottom: 10px; 
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box; /* Añadido para consistencia */
-        }
-        /* RESULTADO E INFO */
-        .result {
-            margin-top: 10px; 
-            padding: 10px; 
-            background-color: #e9ecef;
-            border-radius: 4px;
-            text-align: center;
-            font-size: 1em;
-            color: #333;
-        }
-        .loading { display: none; }
-        .error {
-            text-align: center;
-            margin-top: 5px;
-            color: #dc3545;
-        }
-        .timestamp-info {
-            font-size: 0.7em; 
-            color: #777;
-            text-align: center;
-            margin-top: 5px;
-            line-height: 1.2;
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #0d1117; }
+        .card { box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4); }
     </style>
 </head>
-<body>
-    <div class="header-branding">
-        <img src="https://placehold.co/100x100/333/FFF/png?text=M" alt="Logo Miguelacho"> 
-        <div class="brand-name">Miguelacho</div>
-    </div>
+<body class="min-h-screen flex items-center justify-center p-4">
 
-    <div class="container">
-        <h1>Calculadora de Divisas</h1>
+    <div class="card w-full max-w-md bg-gray-800 p-6 sm:p-8 rounded-xl text-white">
+        <div class="text-center mb-6">
+            <img src="https://placehold.co/60x60/161b22/8b949e?text=💰" alt="Logo" class="mx-auto rounded-full bg-gray-900 p-2 mb-2">
+            <h2 class="text-xl font-extrabold text-white">CAMBIOS MIGUELACHO</h2>
+            <p class="text-sm text-yellow-500">Servicio de Divisas API</p>
+        </div>
 
-        <label for="amount">Cantidad a Convertir:</label>
-        <input type="number" id="amount" value="100" oninput="convertCurrency()">
+        <h1 class="text-2xl font-bold mb-6 text-center text-blue-400 border-b border-gray-700 pb-3">
+            Calculadora de Divisas
+        </h1>
 
-        <label for="originCurrency">De:</label>
-        <select id="originCurrency" onchange="convertCurrency()"></select>
+        <form id="conversion-form">
+            <div class="mb-4">
+                <label for="cantidad" class="block text-sm font-medium text-gray-400 mb-1">Cantidad a Convertir:</label>
+                <input type="number" id="cantidad" value="100" min="0.01" step="0.01" required
+                       class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white">
+            </div>
 
-        <label for="destinationCurrency">A:</label>
-        <select id="destinationCurrency" onchange="convertCurrency()"></select>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label for="origen" class="block text-sm font-medium text-gray-400 mb-1">De:</label>
+                    <select id="origen" required
+                            class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white appearance-none">
+                        <option value="" disabled selected>Cargando monedas...</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="destino" class="block text-sm font-medium text-gray-400 mb-1">A:</label>
+                    <select id="destino" required
+                            class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white appearance-none">
+                        <option value="" disabled selected>Cargando monedas...</option>
+                    </select>
+                </div>
+            </div>
 
-        <div class="result" id="result">Esperando datos...</div>
-        <div class="error" id="error"></div>
-        <div class="loading" id="loading">Cargando...</div>
-        <div class="timestamp-info" id="timestampInfo"></div>
+            <button type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50">
+                Calcular Conversión
+            </button>
+        </form>
+
+        <div class="mt-8">
+            <div id="resultado-card" class="bg-gray-700 p-4 rounded-lg text-center hidden">
+                <p id="resultado-monto" class="text-3xl font-extrabold text-green-400">0.00 COP</p>
+                <div class="text-sm text-gray-400 mt-2">
+                    <p id="detalle-tasa">ID Tasa: N/A | Última Actualización: N/A</p>
+                </div>
+            </div>
+            <p id="error-message" class="text-sm text-red-500 text-center mt-3 hidden">Error al realizar la conversión.</p>
+        </div>
     </div>
 
     <script>
-        const API_BASE_URL = 'https://noctus.jairokov.com'; 
-
-        // CAMBIO 3: Lista de monedas permitidas para este cliente
-        const CLIENT_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES'];
-
-        const loadingDiv = document.getElementById('loading');
-        const errorDiv = document.getElementById('error');
-        const resultDiv = document.getElementById('result');
-        const timestampInfoDiv = document.getElementById('timestampInfo');
-
-        const amountInput = document.getElementById('amount');
-        const originSelect = document.getElementById('originCurrency');
-        const destinationSelect = document.getElementById('destinationCurrency');
-
-        // CAMBIO 4: Mapeo de nombres ajustado a las monedas del cliente
-        const CURRENCY_NAMES = {
-            'COP': 'Peso Colombiano (COP)',
-            'BRL': 'Real Brasileño (BRL)',
-            'PEN': 'Sol Peruano (PEN)',
-            'CLP': 'Peso Chileno (CLP)',
-            'USD': 'Dólar Estadounidense (USD)',
-            'MXN': 'Peso Mexicano (MXN)',
-            'ECU': 'Dólar Ecuatoriano (ECU)',
-            'EUR': 'Euro (EUR)',
-            'VES': 'Bolívar Soberano (VES)'
-        };
-
-        // Formateador para números
-        const formatter = new Intl.NumberFormat('es-ES', {
-            style: 'decimal', 
-            minimumFractionDigits: 2
-        });
+        // *** CONFIGURACIÓN CLAVE: URL de la API de Miguelacho (estable en 8081) ***
+        const API_BASE_URL = 'https://calculadoras-miguelacho.eo3pev.easypanel.host';
+        const ENDPOINT_CONVERTIR = `${API_BASE_URL}/convertir`;
+        const ENDPOINT_MATRIZ = `${API_BASE_URL}/matriz_cruce`; // Usamos la API estable para obtener la lista de monedas
         
-        function formatTimestamp(unixTimestamp) {
-            const timePart = parseInt(unixTimestamp);
-            const isMilliseconds = timePart > 1000000000000;
-            const ms = isMilliseconds ? timePart : timePart * 1000;
-            
-            const date = new Date(ms); 
-            if (isNaN(date.getTime())) return 'Fecha Desconocida';
+        // Elementos DOM
+        const origenSelect = document.getElementById('origen');
+        const destinoSelect = document.getElementById('destino');
+        const form = document.getElementById('conversion-form');
+        const resultadoCard = document.getElementById('resultado-card');
+        const resultadoMonto = document.getElementById('resultado-monto');
+        const detalleTasa = document.getElementById('detalle-tasa');
+        const errorMessage = document.getElementById('error-message');
 
-            return date.toLocaleString('es-ES', { 
-                day: '2-digit', 
-                month: '2-digit', 
-                year: 'numeric', 
-                hour: '2-digit', 
-                minute: '2-digit' 
-            });
-        }
-
-        function showLoading() {
-            loadingDiv.style.display = 'block';
-            errorDiv.textContent = '';
-            resultDiv.textContent = 'Calculando...';
-            timestampInfoDiv.textContent = '';
-        }
-
-        function hideLoading() {
-            loadingDiv.style.display = 'none';
-        }
-
-        function populateDropdown(selectElement, currencies) {
-            selectElement.innerHTML = ''; 
-            currencies.forEach(currency => {
-                if (currency === 'PYUSD') return;
-                
-                const option = document.createElement('option');
-                option.value = currency;
-                
-                const displayName = CURRENCY_NAMES[currency] || currency;
-                option.textContent = displayName;
-                
-                selectElement.appendChild(option);
-            });
-        }
-
-        async function loadCurrencies() {
-            showLoading();
+        // --- LÓGICA DE CARGA DE MONEDAS ---
+        async function fetchAndFillCurrencies() {
             try {
-                const response = await fetch(`${API_BASE_URL}/tasas`);
-                const dataArray = await response.json(); 
-
-                if (!Array.isArray(dataArray) || dataArray.length === 0) {
-                    throw new Error("API de tasas devolvió data no válida.");
-                }
+                // 1. Obtener la Matriz de Cruce
+                const response = await fetch(ENDPOINT_MATRIZ);
+                if (!response.ok) throw new Error('No se pudo cargar la matriz de la API.');
                 
-                const latestRow = dataArray[0];
+                const data = await response.json();
+                if (!data || data.length === 0) throw new Error('Matriz vacía.');
 
-                // CAMBIO 5: Lógica para filtrar las monedas
-                const allApiCurrencies = Object.keys(latestRow)
-                                             .filter(key => key.endsWith('_O'))
-                                             .map(key => key.slice(0, -2));
+                // 2. Extraer los códigos de moneda del primer objeto (encabezados)
+                const availableKeys = Object.keys(data[0]);
                 
-                // Filtramos las monedas de la API contra la lista permitida para el cliente
-                const currencies = allApiCurrencies.filter(c => CLIENT_CURRENCIES.includes(c));
+                // 3. Filtrar para obtener solo los códigos de moneda válidos (ej: COP, BRL, PEN, etc.)
+                const MONEDAS = availableKeys
+                    .filter(key => key !== '+/-' && key !== 'Columna0' && key !== 'Columna1'); 
+                
+                if (MONEDAS.length === 0) throw new Error('No se encontraron códigos de moneda válidos.');
 
-                if (currencies.length === 0) {
-                    throw new Error("No se encontraron códigos de divisa válidos en la respuesta.");
-                }
+                // 4. Llenar los selectores
+                origenSelect.innerHTML = '';
+                destinoSelect.innerHTML = '';
+                
+                MONEDAS.forEach(moneda => {
+                    const optionOrigen = new Option(`${moneda} (${moneda})`, moneda);
+                    const optionDestino = new Option(`${moneda} (${moneda})`, moneda);
+                    origenSelect.add(optionOrigen);
+                    destinoSelect.add(optionDestino);
+                });
 
-                populateDropdown(originSelect, currencies);
-                populateDropdown(destinationSelect, currencies);
-
-                originSelect.value = 'USD'; 
-                destinationSelect.value = 'COP'; 
-
-                await convertCurrency(); 
+                // 5. Establecer valores por defecto e iniciar cálculo
+                origenSelect.value = 'USD'; 
+                destinoSelect.value = 'COP'; 
+                handleConversion(new Event('submit')); // Disparar el primer cálculo
 
             } catch (error) {
-                console.error("Error al cargar divisas:", error);
-                errorDiv.textContent = `Error al cargar divisas: ${error.message}.`;
-                resultDiv.textContent = 'Fallo al iniciar.';
-            } finally {
-                hideLoading();
+                console.error('Error al cargar la lista de monedas:', error);
+                origenSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
+                destinoSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique la API</option>`;
+                errorMessage.textContent = `ERROR: No se pudo obtener la lista de monedas. ${error.message}`;
+                errorMessage.classList.remove('hidden');
             }
         }
 
-        async function convertCurrency() {
-            const amount = amountInput.value;
-            const origin = originSelect.value;
-            const destination = destinationSelect.value;
+        // --- LÓGICA DE CÁLCULO Y ENVÍO A LA API ---
+        let debounceTimeout;
+        function calculateConversion(e) {
+            if (e) e.preventDefault();
+            clearTimeout(debounceTimeout);
+            // Esperar 300ms para evitar múltiples llamadas al escribir
+            debounceTimeout = setTimeout(handleConversion, 300);
+        }
 
-            if (!amount || amount <= 0) {
-                errorDiv.textContent = "Ingrese una cantidad válida.";
-                resultDiv.textContent = '';
-                return;
-            }
+        async function handleConversion(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            
+            resultadoCard.classList.add('hidden');
+            errorMessage.classList.add('hidden');
 
-            showLoading();
+            const cantidad = document.getElementById('cantidad').value;
+            const origen = origenSelect.value;
+            const destino = destinoSelect.value;
+
+            if (!cantidad || !origen || !destino) return;
+
+            const url = `${ENDPOINT_CONVERTIR}?cantidad=${cantidad}&origen=${origen}&destino=${destino}`;
+
             try {
-                const endpoint = `/convertir?cantidad=${amount}&origen=${origin}&destino=${destination}`;
-                const response = await fetch(`${API_BASE_URL}${endpoint}`);
+                const response = await fetch(url);
                 const data = await response.json();
 
-                if (data.status === "success") {
-                    const montoFormateado = formatter.format(data.monto_convertido);
+                if (response.ok && data.status === 'success') {
+                    // Formato de número con separador decimal ','
+                    const formatter = new Intl.NumberFormat('es-ES', { 
+                        minimumFractionDigits: 2, 
+                        maximumFractionDigits: 4 
+                    });
                     
-                    const destinationName = CURRENCY_NAMES[destination] || destination;
+                    const monto = formatter.format(data.monto_convertido);
+                    const monedaDestino = destino;
                     
-                    resultDiv.innerHTML = `<strong>${destinationName}: ${montoFormateado}</strong>`;
-                    
-                    const fechaFormateada = formatTimestamp(data.detalle.timestamp_actual);
-                    timestampInfoDiv.innerHTML = `
-                        ID Tasa: <b>${data.detalle.id_tasa_actual}</b> | 
-                        Última Actualización: ${fechaFormateada}
-                    `;
-                    errorDiv.textContent = '';
-
+                    resultadoMonto.textContent = `${monedaDestino} ${monto}`;
+                    detalleTasa.innerHTML = `ID Tasa: ${data.detalle.id_tasa_actual}; Factor: ${data.detalle.factor_ganancia}`;
+                    resultadoCard.classList.remove('hidden');
                 } else {
-                    errorDiv.textContent = data.error || 'Error desconocido en la conversión.';
-                    resultDiv.textContent = 'Error.';
-                    timestampInfoDiv.textContent = '';
+                    // Muestra el error específico que viene del backend
+                    throw new Error(data.error || 'Respuesta de API inválida.');
                 }
             } catch (error) {
-                console.error("Error durante la conversión:", error);
-                errorDiv.textContent = "Error al conectar con el servicio de conversión.";
-                resultDiv.textContent = 'Fallo.';
-            } finally {
-                hideLoading();
+                console.error('Error de conversión:', error);
+                errorMessage.textContent = `Error de conversión: ${error.message}. Intente de nuevo.`;
+                errorMessage.classList.remove('hidden');
             }
         }
 
-        document.addEventListener('DOMContentLoaded', loadCurrencies);
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndFillCurrencies();
+            form.addEventListener('submit', handleConversion);
+
+            // Escucha cambios para calcular automáticamente
+            origenSelect.addEventListener('change', calculateConversion);
+            destinoSelect.addEventListener('change', calculateConversion);
+            document.getElementById('cantidad').addEventListener('input', calculateConversion);
+        });
     </script>
 </body>
 </html>
+```eof
