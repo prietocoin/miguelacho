@@ -5,18 +5,21 @@ FROM node:20-slim
 WORKDIR /usr/src/app
 
 # Copia los archivos de definición de dependencia (package.json y package-lock.json)
-# Esto permite que Docker use caché para la instalación de dependencias si no cambian
 COPY package*.json ./
 
-# Instala las dependencias. Esto reemplaza npm install en el buildpack
+# Instala las dependencias.
 RUN npm install --omit=dev
 
 # Copia el código fuente de tu aplicación al directorio de trabajo
 COPY . .
 
-# Expone el puerto que tu aplicación usa (PORT en index.js)
-# Usaremos el puerto 8080 como fallback, aunque la aplicación usará process.env.PORT
-EXPOSE 8080
+# --- CONFIGURACIÓN DE PUERTO Y EJECUCIÓN ---
 
-# --- LÍNEA DE SOLUCIÓN: Ejecuta Node directamente en lugar de 'npm start' ---
+# Define una variable de entorno con el puerto (la toma index.js)
+ENV PORT=8081
+
+# EXPONE el puerto que la aplicación escuchará (importante para Docker)
+EXPOSE 8081
+
+# Comando de inicio: ejecuta Node.js directamente como proceso principal (PID 1)
 CMD [ "node", "index.js" ]
