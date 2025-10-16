@@ -79,3 +79,83 @@
             <p id="error-message" class="text-sm text-red-500 text-center mt-3 hidden">Error al realizar la conversión.</p>
         </div>
     </div>
+
+    <script>
+        const API_BASE_URL = 'https://noctus.jairokov.com';
+        const ENDPOINT_MATRIZ_GANANCIA = `${API_BASE_URL}/matriz-ganancia`; 
+        const ENDPOINT_TASAS_BASE = `${API_BASE_URL}/tasas-promedio`; 
+        
+        const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
+        const CURRENCY_MAP = { 'ECU': 'USD' };
+
+        const CURRENCY_NAMES = {
+            'COP': 'Peso Colombiano', 'BRL': 'Real Brasileño', 'PEN': 'Sol Peruano',
+            'CLP': 'Peso Chileno', 'USD': 'Dólar Estadounidense', 'MXN': 'Peso Mexicano',
+            'ECU': 'Dólar Ecuatoriano', 'EUR': 'Euro', 'VES': 'Bolívar Soberano',
+            'ARS': 'Peso Argentino'
+        };
+
+        let TASAS_BASE = {}; 
+        let GANANCIA_MATRIX = {}; 
+        let ID_TAS_DATA = 'N/A'; 
+        
+        const origenSelect = document.getElementById('origen');
+        const destinoSelect = document.getElementById('destino');
+        const form = document.getElementById('conversion-form');
+        const resultadoCard = document.getElementById('resultado-card');
+        const resultadoMonto = document.getElementById('resultado-monto');
+        const detalleTasa = document.getElementById('detalle-tasa');
+        const detalleFecha = document.getElementById('detalle-fecha'); 
+        const errorMessage = document.getElementById('error-message');
+        const calculateButton = document.getElementById('calculate-button'); 
+
+        // --- LÓGICA DE CARGA DE MONEDAS Y TASAS (Estabilizada) ---
+        async function fetchAndFillCurrencies() {
+            calculateButton.textContent = 'Cargando...';
+            calculateButton.disabled = true;
+
+            try {
+                const [respGanancia, respTasas] = await Promise.all([
+                    fetch(ENDPOINT_MATRIZ_GANANCIA),
+                    fetch(ENDPOINT_TASAS_BASE)
+                ]);
+
+                if (!respGanancia.ok) throw new Error('No se pudo cargar la matriz de ganancia (' + respGanancia.status + ').');
+                if (!respTasas.ok) throw new Error('No se pudieron cargar las tasas base (' + respTasas.status + ').');
+                
+                const dataGanancia = await respGanancia.json();
+                const dataTasas = await respTasas.json();
+
+                // 2. Procesar Matriz de Ganancia
+                const matrixMap = {};
+                dataGanancia.forEach(row => {
+                    const sourceCode = row[""]; 
+                    if (sourceCode) {
+                        matrixMap[sourceCode] = row;
+                        if (row.IDTAS && ID_TAS_DATA === 'N/A') { 
+                            ID_TAS_DATA = String(row.IDTAS);
+                        }
+                    }
+                });
+                GANANCIA_MATRIX = matrixMap;
+
+                // 3. Procesar Tasas Base
+                if (dataTasas.length === 0) throw new Error('Tasas base vacías.');
+                
+                let tasasObj = Array.isArray(dataTasas) ? dataTasas[0] : dataTasas;
+                if (!tasasObj) throw new Error('Tasas base vacías.');
+
+                if (tasasObj.IDTAS) { 
+                    ID_TAS_DATA = String(tasasObj.IDTAS);
+                } else if (tasasObj.T003) {
+                     ID_TAS_DATA = String(tasasObj.T003);
+                }
+                
+                for (const key in tasasObj) {
+                    if (key !== 'IDTAS' && key !== 'T003' && key !== 'timestamp' && key !== 'fecha' && key !== 'actualizacion') {
+                        TASAS_BASE[key] = parseFloat(String(tasasObj[key]).trim());
+                    }
+                }
+
+                // 4. Llenar Selectores 
+                const API_MONEDAS_DISPONIBLES = Object.keys(TASAS_BASE);
