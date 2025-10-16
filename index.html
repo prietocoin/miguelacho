@@ -58,7 +58,7 @@
             <div id="resultado-card" class="bg-gray-700 p-4 rounded-lg text-center hidden">
                 <p id="resultado-monto" class="text-3xl font-extrabold text-green-400">0.00 COP</p>
                 <div class="text-sm text-gray-400 mt-2">
-                    <p id="detalle-tasa">Tasa Base: N/A ; Factor de Ganancia: N/A</p>
+                    <p id="detalle-tasa">Tasa Neta: N/A ; Última Actualización: N/A</p>
                 </div>
             </div>
             <p id="error-message" class="text-sm text-red-500 text-center mt-3 hidden">Error al realizar la conversión.</p>
@@ -69,19 +69,15 @@
         // *** CONFIGURACIÓN CLAVE: APIs de NOCTUS ***
         const API_BASE_URL = 'https://noctus.jairokov.com';
         const ENDPOINT_MATRIZ_GANANCIA = `${API_BASE_URL}/matriz-ganancia`; 
-        const ENDPOINT_TASAS_BASE = `${API_BASE_URL}/tasas-promedio`; // Nuevo endpoint para tasas base
+        const ENDPOINT_TASAS_BASE = `${API_BASE_URL}/tasas-promedio`; 
         
-        // Monedas solicitadas
         const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
-        
-        // Mapeo (ECU se mapea a USD para el cálculo)
-        const CURRENCY_MAP = {
-            'ECU': 'USD' 
-        };
+        const CURRENCY_MAP = { 'ECU': 'USD' };
 
         // Almacenamiento local de los datos
-        let TASAS_BASE = {}; // Para las tasas como USD: 1.00, COP: 3890
-        let GANANCIA_MATRIX = {}; // Para obtener el factor de ganancia (ej. 0.88)
+        let TASAS_BASE = {}; 
+        let GANANCIA_MATRIX = {}; 
+        let TIMESTAMP_DATA = 'N/A'; // Para almacenar la fecha o timestamp
         
         // Elementos DOM 
         const origenSelect = document.getElementById('origen');
@@ -99,7 +95,6 @@
             calculateButton.disabled = true;
 
             try {
-                // 1. Obtener la Matriz de Ganancia (para factores)
                 const [respGanancia, respTasas] = await Promise.all([
                     fetch(ENDPOINT_MATRIZ_GANANCIA),
                     fetch(ENDPOINT_TASAS_BASE)
@@ -121,22 +116,21 @@
                 });
                 GANANCIA_MATRIX = matrixMap;
 
-                // 3. Procesar Tasas Base
+                // 3. Procesar Tasas Base y Timestamp
                 if (dataTasas.length === 0) throw new Error('Tasas base vacías.');
-                // ASUNCIÓN: El JSON de tasas base es un array con UN objeto { "COP": "3890", "USD": "1.00", ... }
-                // La imagen sugiere un objeto con claves de moneda
-                TASAS_BASE = {};
-                if (Array.isArray(dataTasas) && dataTasas.length > 0) {
-                     // Si es un array con un objeto, tomamos el primer objeto
-                    const tasasObj = dataTasas[0];
-                    for (const key in tasasObj) {
-                         // Convertimos los valores a float, ya que vienen como strings
-                         TASAS_BASE[key] = parseFloat(tasasObj[key]);
-                    }
-                } else if (typeof dataTasas === 'object' && dataTasas !== null) {
-                    // Si es solo un objeto (como sugiere la imagen)
-                    for (const key in dataTasas) {
-                         TASAS_BASE[key] = parseFloat(dataTasas[key]);
+                
+                let tasasObj = Array.isArray(dataTasas) ? dataTasas[0] : dataTasas;
+                if (!tasasObj) throw new Error('Tasas base vacías.');
+
+                // Buscamos un campo de fecha o timestamp
+                if (tasasObj.timestamp || tasasObj.fecha || tasasObj.actualizacion) {
+                    TIMESTAMP_DATA = tasasObj.timestamp || tasasObj.fecha || tasasObj.actualizacion;
+                }
+                
+                for (const key in tasasObj) {
+                    // Ignoramos el campo de fecha si existe y parseamos el resto
+                    if (key !== 'timestamp' && key !== 'fecha' && key !== 'actualizacion') {
+                        TASAS_BASE[key] = parseFloat(tasasObj[key]);
                     }
                 }
 
@@ -210,11 +204,12 @@
                 const cantidadFloat = parseFloat(cantidad);
 
                 if (origenCode === destinoCode) {
-                    displayResult(cantidadFloat, 1, 1, destino);
+                    // En la conversión 1:1, la tasa neta final es 1
+                    displayResult(cantidadFloat, 1, destino); 
                     return;
                 }
                 
-                // 1. OBTENER TASAS BASE (ej. USD/USD = 1, COP/USD = 3890)
+                // 1. OBTENER TASAS BASE (ej. USD: 1, COP: 3890)
                 const tasaBaseOrigen = TASAS_BASE[origenCode];
                 const tasaBaseDestino = TASAS_BASE[destinoCode];
 
@@ -222,24 +217,22 @@
                      throw new Error(`Tasas base para ${origen} o ${destino} no encontradas o inválidas.`);
                 }
                 
-                // 2. CALCULAR TASA CRUZADA: (Tasa Destino / Tasa Origen)
-                const tasaNetaCruzada = tasaBaseDestino / tasaBaseOrigen;
-                
-                // 3. OBTENER FACTOR DE GANANCIA (de la matriz)
-                // Usamos la matriz de ganancia para obtener el factor que aplicaremos
+                // 2. OBTENER FACTOR DE GANANCIA (ej. 0.88)
                 let factorGanancia = 1.0; 
                 if (GANANCIA_MATRIX[origenCode] && GANANCIA_MATRIX[origenCode][destinoCode]) {
-                    // Si el valor está en la matriz, lo usamos.
                     factorGanancia = parseFloat(GANANCIA_MATRIX[origenCode][destinoCode]);
                 } 
-
-                if (isNaN(factorGanancia)) factorGanancia = 1.0; // Evita NaN si el valor de la matriz es inválido
+                if (isNaN(factorGanancia)) factorGanancia = 1.0; 
                 
-                // 4. FÓRMULA FINAL: Cantidad * Tasa Cruzada * Factor de Ganancia
-                const montoConvertido = cantidadFloat * tasaNetaCruzada * factorGanancia;
+                // 3. CALCULAR TASA NETA FINAL: (Tasa Destino / Tasa Origen) * Factor de Ganancia
+                const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
+                const tasaNetaFinal = tasaCruzadaSinFactor * factorGanancia;
 
-                // Para los detalles, mostramos la Tasa Neta y el Factor de Ganancia
-                displayResult(montoConvertido, tasaNetaCruzada, factorGanancia, destino);
+                // 4. CÁLCULO FINAL: Cantidad * Tasa Neta Final
+                const montoConvertido = cantidadFloat * tasaNetaFinal;
+
+                // Para los detalles, pasamos la Tasa Neta Final
+                displayResult(montoConvertido, tasaNetaFinal, destino);
 
             } catch (error) {
                 console.error('Error de conversión:', error);
@@ -248,18 +241,42 @@
             }
         }
         
-        function displayResult(montoConvertido, tasaNeta, factorGanancia, destino) {
+        function displayResult(montoConvertido, tasaNetaFinal, destino) {
             const formatter = new Intl.NumberFormat('es-ES', { 
                 minimumFractionDigits: 2, 
-                maximumFractionDigits: 2 // Mostramos solo 2 decimales para el monto final
+                maximumFractionDigits: 2
             });
             
+            // Función para formatear el timestamp
+            const formatTimestamp = (timestamp) => {
+                if (!timestamp || timestamp === 'N/A') return 'N/A';
+                
+                let date;
+                if (typeof timestamp === 'number' || (typeof timestamp === 'string' && !isNaN(Date.parse(timestamp)))) {
+                    // Intenta crear la fecha desde un número (timestamp) o string de fecha
+                    date = new Date(timestamp * 1000); // Asume segundos (común en Unix)
+                    if (isNaN(date.getTime())) {
+                        date = new Date(timestamp); // Intenta el string sin multiplicar
+                    }
+                } else {
+                    return timestamp; // Devuelve el string si no es un formato de fecha reconocido
+                }
+
+                if (isNaN(date.getTime())) return 'N/A';
+
+                return date.toLocaleDateString('es-ES', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric', 
+                    hour: '2-digit', minute: '2-digit', second: '2-digit' 
+                });
+            };
+
             const monto = formatter.format(montoConvertido);
-            const monedaDestinoDisplay = destino;
             
-            resultadoMonto.textContent = `${monedaDestinoDisplay} ${monto}`;
-            // Usando el separador de elementos ';' solicitado por el usuario
-            detalleTasa.innerHTML = `Tasa Neta: ${tasaNeta.toFixed(4)} ; Factor de Ganancia: ${factorGanancia.toFixed(6)}`;
+            resultadoMonto.textContent = `${destino} ${monto}`;
+            
+            // Tasa Neta: Valor de la tasa de conversión final
+            // Última Actualización: Muestra el timestamp procesado
+            detalleTasa.innerHTML = `Tasa Neta: ${tasaNetaFinal.toFixed(6)} ; Última Actualización: ${formatTimestamp(TIMESTAMP_DATA)}`;
             
             resultadoCard.classList.remove('hidden');
         }
