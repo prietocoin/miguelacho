@@ -9,13 +9,15 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0d1117; }
         .card { box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4); }
+        /* Estilo personalizado para las líneas de selección */
+        .select-line { width: 100%; } 
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
     <div class="card w-full max-w-md bg-gray-800 p-6 sm:p-8 rounded-xl text-white">
         <div class="text-center mb-6">
-            <img src="./Miguelacho.jpeg" alt="Logo de Cambios Miguelacho" class="mx-auto h-16 w-16 rounded-full bg-gray-900 p-2 mb-2 object-cover">
+            <img src="./Miguelacho.jpeg" alt="Logo de Cambios Miguelacho" class="mx-auto h-20 w-20 rounded-full bg-gray-900 p-2 mb-2 object-cover">
             <h2 class="text-xl font-extrabold text-white">CAMBIOS MIGUELACHO</h2>
             <p class="text-sm text-yellow-500">Servicio de Divisas API</p>
         </div>
@@ -25,40 +27,39 @@
         </h1>
 
         <form id="conversion-form">
+            <div class="flex items-end space-x-4 mb-4">
+                <div class="flex-grow">
+                    <label for="cantidad" class="block text-sm font-medium text-gray-400 mb-1">Cantidad a Convertir:</label>
+                    <input type="number" id="cantidad" value="100" min="0.01" step="0.01" required
+                            class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white">
+                </div>
+                <button type="submit" id="calculate-button"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 whitespace-nowrap">
+                    Calcular
+                </button>
+            </div>
+
             <div class="mb-4">
-                <label for="cantidad" class="block text-sm font-medium text-gray-400 mb-1">Cantidad a Convertir:</label>
-                <input type="number" id="cantidad" value="100" min="0.01" step="0.01" required
-                        class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white">
+                <label for="origen" class="block text-sm font-medium text-gray-400 mb-1">De:</label>
+                <select id="origen" required class="select-line px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white appearance-none">
+                    <option value="" disabled selected>Cargando monedas...</option>
+                </select>
             </div>
 
-            <div class="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                    <label for="origen" class="block text-sm font-medium text-gray-400 mb-1">De:</label>
-                    <select id="origen" required
-                            class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white appearance-none">
-                        <option value="" disabled selected>Cargando monedas...</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="destino" class="block text-sm font-medium text-gray-400 mb-1">A:</label>
-                    <select id="destino" required
-                            class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white appearance-none">
-                        <option value="" disabled selected>Cargando monedas...</option>
-                    </select>
-                </div>
+            <div class="mb-6">
+                <label for="destino" class="block text-sm font-medium text-gray-400 mb-1">A:</label>
+                <select id="destino" required class="select-line px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white appearance-none">
+                    <option value="" disabled selected>Cargando monedas...</option>
+                </select>
             </div>
 
-            <button type="submit" id="calculate-button"
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50">
-                Calcular Conversión
-            </button>
         </form>
 
         <div class="mt-8">
             <div id="resultado-card" class="bg-gray-700 p-4 rounded-lg text-center hidden">
                 <p id="resultado-monto" class="text-3xl font-extrabold text-green-400">0.00 COP</p>
                 <div class="text-sm text-gray-400 mt-2">
-                    <p id="detalle-tasa">Tasa Neta: N/A</p>
+                    <p id="detalle-tasa">ID Tasa: N/A ; Tasa Neta: N/A</p> 
                     <p id="detalle-fecha" class="mt-1 text-xs">Última Actualización: N/A</p>
                 </div>
             </div>
@@ -74,24 +75,17 @@
         const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
         const CURRENCY_MAP = { 'ECU': 'USD' };
 
-        // Mapeo de nombres para la visualización
         const CURRENCY_NAMES = {
-            'COP': 'Peso Colombiano',
-            'BRL': 'Real Brasileño',
-            'PEN': 'Sol Peruano',
-            'CLP': 'Peso Chileno',
-            'USD': 'Dólar Estadounidense',
-            'MXN': 'Peso Mexicano',
-            'ECU': 'Dólar Ecuatoriano',
-            'EUR': 'Euro',
-            'VES': 'Bolívar Soberano',
+            'COP': 'Peso Colombiano', 'BRL': 'Real Brasileño', 'PEN': 'Sol Peruano',
+            'CLP': 'Peso Chileno', 'USD': 'Dólar Estadounidense', 'MXN': 'Peso Mexicano',
+            'ECU': 'Dólar Ecuatoriano', 'EUR': 'Euro', 'VES': 'Bolívar Soberano',
             'ARS': 'Peso Argentino'
         };
 
         // Almacenamiento local de los datos
         let TASAS_BASE = {}; 
         let GANANCIA_MATRIX = {}; 
-        let TIMESTAMP_DATA = 'N/A'; 
+        let ID_TAS_DATA = 'N/A'; // Nuevo para IDTAS
         
         // Elementos DOM
         const origenSelect = document.getElementById('origen');
@@ -127,28 +121,32 @@
                     const sourceCode = row[""]; 
                     if (sourceCode) {
                         matrixMap[sourceCode] = row;
+                        // BUSCAMOS IDTAS en la matriz de ganancia (Columna1 o similar)
+                        if (row.IDTAS && ID_TAS_DATA === 'N/A') { 
+                            ID_TAS_DATA = String(row.IDTAS);
+                        }
                     }
                 });
                 GANANCIA_MATRIX = matrixMap;
 
-                // 3. Procesar Tasas Base y Timestamp
+                // 3. Procesar Tasas Base
                 if (dataTasas.length === 0) throw new Error('Tasas base vacías.');
                 
                 let tasasObj = Array.isArray(dataTasas) ? dataTasas[0] : dataTasas;
                 if (!tasasObj) throw new Error('Tasas base vacías.');
 
-                // Buscamos un campo de fecha o timestamp
-                if (tasasObj.timestamp || tasasObj.fecha || tasasObj.actualizacion) {
-                    TIMESTAMP_DATA = tasasObj.timestamp || tasasObj.fecha || tasasObj.actualizacion;
+                // BUSCAMOS IDTAS en el objeto de tasas base
+                if (tasasObj.IDTAS) { 
+                    ID_TAS_DATA = String(tasasObj.IDTAS);
                 }
                 
                 for (const key in tasasObj) {
-                    if (key !== 'timestamp' && key !== 'fecha' && key !== 'actualizacion') {
+                    if (key !== 'IDTAS' && key !== 'timestamp' && key !== 'fecha' && key !== 'actualizacion') {
                         TASAS_BASE[key] = parseFloat(tasasObj[key]);
                     }
                 }
 
-                // 4. Llenar Selectores 
+                // 4. Llenar Selectores
                 const API_MONEDAS_DISPONIBLES = Object.keys(TASAS_BASE);
                 const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
                     const lookupCode = CURRENCY_MAP[moneda] || moneda;
@@ -179,7 +177,7 @@
                 errorMessage.textContent = `ERROR: No se pudieron obtener las tasas. ${error.message}`;
                 errorMessage.classList.remove('hidden');
             } finally {
-                 calculateButton.textContent = 'Calcular Conversión';
+                 calculateButton.textContent = 'Calcular';
                  calculateButton.disabled = false;
             }
         }
@@ -233,7 +231,7 @@
                 } 
                 if (isNaN(factorGanancia)) factorGanancia = 1.0; 
                 
-                // CALCULAR TASA NETA FINAL: (Tasa Destino / Tasa Origen) * Factor de Ganancia
+                // CALCULAR TASA NETA FINAL
                 const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
                 const tasaNetaFinal = tasaCruzadaSinFactor * factorGanancia;
 
@@ -256,12 +254,11 @@
                 // Regla 1: Si es mayor o igual a 1, mostrar 2 decimales
                 return tasa.toFixed(2); 
             } else if (absTasa > 0) {
-                // Regla 2: Si es menor a 1 y mayor a 0, mostrar decimales hasta la tercera cifra significativa
+                // Regla 2: Si es menor a 1 y mayor a 0, mostrar hasta la tercera cifra significativa
                 
                 const tasaStr = absTasa.toFixed(10); 
                 let firstSignificantIndex = -1;
 
-                // Encontrar el índice del primer dígito significativo (distinto de cero)
                 for (let i = 2; i < tasaStr.length; i++) {
                     if (tasaStr[i] !== '0' && tasaStr[i] !== '.') {
                         firstSignificantIndex = i;
@@ -270,11 +267,9 @@
                 }
                 
                 if (firstSignificantIndex !== -1) {
-                    // Calculamos los decimales necesarios para incluir 3 cifras significativas
                     const decimalPlaces = firstSignificantIndex - 2 + 3; 
                     return tasa.toFixed(decimalPlaces);
                 } else {
-                    // Si la tasa es 0.000... (muy pequeña), usamos 6 decimales por defecto
                     return tasa.toFixed(6);
                 }
             } else {
@@ -282,20 +277,11 @@
             }
         }
 
-        // Función para la hora y fecha localizada
-        const formatTimestamp = (timestamp) => {
-            if (!timestamp || timestamp === 'N/A') return 'N/A';
+        // Función para la hora y fecha localizada (usando Date.now() y zona horaria de Bogotá)
+        const formatTimestamp = () => {
             try {
-                let date;
-                if (typeof timestamp === 'number' && timestamp > 10000000000) {
-                    date = new Date(timestamp); 
-                } else if (typeof timestamp === 'number') {
-                    date = new Date(timestamp * 1000); 
-                } else {
-                    date = new Date(timestamp); 
-                }
-
-                if (isNaN(date.getTime())) return String(timestamp); 
+                // Usamos la hora actual para el timestamp solicitado
+                const date = new Date(Date.now()); 
 
                 // Mostrar fecha y hora en formato de Colombia
                 return date.toLocaleDateString('es-ES', { 
@@ -304,7 +290,7 @@
                     timeZone: 'America/Bogota' // Zona horaria de Colombia
                 }) + ' (Hora Colombia)';
             } catch (e) {
-                return String(timestamp);
+                return 'N/A';
             }
         };
 
@@ -316,16 +302,15 @@
             
             const monto = formatter.format(montoConvertido);
             const tasaNetaFormateada = formatTasaNeta(tasaNetaFinal);
-            const fechaActualizacion = formatTimestamp(TIMESTAMP_DATA);
-
+            
             // Resultado del Monto
             resultadoMonto.textContent = `${destino} ${monto}`;
             
-            // Tasa Neta
-            detalleTasa.textContent = `Tasa Neta: ${tasaNetaFormateada}`;
+            // ID Tasa y Tasa Neta
+            detalleTasa.textContent = `ID Tasa: ${ID_TAS_DATA} ; Tasa Neta: ${tasaNetaFormateada}`;
             
-            // Última Actualización (en la segunda línea)
-            detalleFecha.textContent = `Última Actualización: ${fechaActualizacion}`;
+            // Última Actualización (hora actual de Colombia)
+            detalleFecha.textContent = `Última Actualización: ${formatTimestamp()}`;
             
             resultadoCard.classList.remove('hidden');
         }
