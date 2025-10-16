@@ -100,4 +100,274 @@
         let ID_TAS_DATA = 'N/A'; 
         
         const origenSelect = document.getElementById('origen');
-        const
+        const destinoSelect = document.getElementById('destino');
+        const form = document.getElementById('conversion-form');
+        const resultadoCard = document.getElementById('resultado-card');
+        const resultadoMonto = document.getElementById('resultado-monto');
+        const detalleTasa = document.getElementById('detalle-tasa');
+        const detalleFecha = document.getElementById('detalle-fecha'); 
+        const errorMessage = document.getElementById('error-message');
+        const calculateButton = document.getElementById('calculate-button'); 
+
+        // --- LÓGICA DE CARGA DE MONEDAS Y TASAS (Estabilizada) ---
+        async function fetchAndFillCurrencies() {
+            calculateButton.textContent = 'Cargando...';
+            calculateButton.disabled = true;
+
+            try {
+                const [respGanancia, respTasas] = await Promise.all([
+                    fetch(ENDPOINT_MATRIZ_GANANCIA),
+                    fetch(ENDPOINT_TASAS_BASE)
+                ]);
+
+                if (!respGanancia.ok) throw new Error('No se pudo cargar la matriz de ganancia (' + respGanancia.status + ').');
+                if (!respTasas.ok) throw new Error('No se pudieron cargar las tasas base (' + respTasas.status + ').');
+                
+                const dataGanancia = await respGanancia.json();
+                const dataTasas = await respTasas.json();
+
+                // 2. Procesar Matriz de Ganancia
+                const matrixMap = {};
+                dataGanancia.forEach(row => {
+                    const sourceCode = row[""]; 
+                    if (sourceCode) {
+                        matrixMap[sourceCode] = row;
+                        if (row.IDTAS && ID_TAS_DATA === 'N/A') { 
+                            ID_TAS_DATA = String(row.IDTAS);
+                        }
+                    }
+                });
+                GANANCIA_MATRIX = matrixMap;
+
+                // 3. Procesar Tasas Base
+                if (dataTasas.length === 0) throw new Error('Tasas base vacías.');
+                
+                let tasasObj = Array.isArray(dataTasas) ? dataTasas[0] : dataTasas;
+                if (!tasasObj) throw new Error('Tasas base vacías.');
+
+                if (tasasObj.IDTAS) { 
+                    ID_TAS_DATA = String(tasasObj.IDTAS);
+                } else if (tasasObj.T003) {
+                     ID_TAS_DATA = String(tasasObj.T003);
+                }
+                
+                for (const key in tasasObj) {
+                    if (key !== 'IDTAS' && key !== 'T003' && key !== 'timestamp' && key !== 'fecha' && key !== 'actualizacion') {
+                        TASAS_BASE[key] = parseFloat(String(tasasObj[key]).trim());
+                    }
+                }
+
+                // 4. Llenar Selectores 
+                const API_MONEDAS_DISPONIBLES = Object.keys(TASAS_BASE);
+                const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
+                    const lookupCode = CURRENCY_MAP[moneda] || moneda;
+                    return API_MONEDAS_DISPONIBLES.includes(lookupCode);
+                });
+                
+                if (finalMonedas.length === 0) throw new Error('No se encontraron códigos de moneda válidos.');
+
+                origenSelect.innerHTML = '';
+                destinoSelect.innerHTML = '';
+                
+                finalMonedas.forEach(moneda => {
+                    const displayText = `${moneda} (${CURRENCY_NAMES[moneda]})`;
+                    const optionOrigen = new Option(displayText, moneda);
+                    const optionDestino = new Option(displayText, moneda);
+                    origenSelect.add(optionOrigen);
+                    destinoSelect.add(optionDestino);
+                });
+
+                // --- PREDETERMINADO: COP a VES (Estabilizado) ---
+                if (finalMonedas.includes('COP')) {
+                    origenSelect.value = 'COP'; 
+                }
+                if (finalMonedas.includes('VES')) {
+                    destinoSelect.value = 'VES';
+                } else if (finalMonedas.includes('USD')) {
+                    destinoSelect.value = 'USD';
+                }
+                
+                if (Object.keys(TASAS_BASE).length > 0) {
+                   calculateConversion(new Event('submit')); 
+                }
+                
+            } catch (error) {
+                console.error('Error al cargar la lista de monedas o tasas:', error);
+                
+                origenSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique las APIs</option>`;
+                destinoSelect.innerHTML = `<option value="" disabled selected>ERROR: Verifique las APIs</option>`;
+                
+                errorMessage.textContent = `ERROR de carga: No se pudieron obtener las tasas. ${error.message}`;
+                errorMessage.classList.remove('hidden');
+            } finally {
+                 calculateButton.textContent = 'Calcular';
+                 calculateButton.disabled = false;
+            }
+        }
+
+        // --- LÓGICA DE CÁLCULO FINAL ---
+        let debounceTimeout;
+        function calculateConversion(e) {
+            if (e) e.preventDefault();
+            clearTimeout(debounceTimeout);
+            debounceTimeout = setTimeout(handleConversion, 300);
+        }
+
+        function handleConversion(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            
+            resultadoCard.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            const cantidad = document.getElementById('cantidad').value;
+            const origen = origenSelect.value;
+            const destino = destinoSelect.value;
+
+            if (!cantidad || !origen || !destino || !Object.keys(TASAS_BASE).length) {
+                if (Object.keys(TASAS_BASE).length) {
+                    errorMessage.textContent = 'Faltan campos por completar.';
+                }
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const origenCode = CURRENCY_MAP[origen] || origen;
+                const destinoCode = CURRENCY_MAP[destino] || destino;
+                const cantidadFloat = parseFloat(cantidad);
+
+                if (origenCode === destinoCode) {
+                    displayResult(cantidadFloat, 1, destino); 
+                    return;
+                }
+                
+                const tasaBaseOrigen = TASAS_BASE[origenCode];
+                const tasaBaseDestino = TASAS_BASE[destinoCode];
+
+                if (tasaBaseOrigen === undefined || tasaBaseDestino === undefined || tasaBaseOrigen === 0) {
+                     throw new Error(`Tasas base para ${origen} o ${destino} no encontradas o inválidas.`);
+                }
+                
+                // 1. OBTENER FACTOR DE GANANCIA (Buscando inversamente: B->A)
+                let factorAplicado = 1.0; 
+                if (GANANCIA_MATRIX[destinoCode] && GANANCIA_MATRIX[destinoCode][origenCode]) {
+                    factorAplicado = parseFloat(GANANCIA_MATRIX[destinoCode][origenCode]);
+                } 
+                if (isNaN(factorAplicado) || factorAplicado === 0) factorAplicado = 1.0;
+                
+                let tasaNetaFinal;
+                let montoConvertido;
+
+                // --- EXCEPCIÓN SOLICITADA: COP a VES (DIVISIÓN TRIPLE) ---
+                if (origen === 'COP' && destino === 'VES') {
+                    
+                    if (tasaBaseOrigen === 0 || tasaBaseDestino === 0 || factorAplicado === 0) {
+                        throw new Error("División por cero. Una de las tasas o el factor es cero.");
+                    }
+
+                    // FÓRMULA VALIDADA: Monto = Cantidad / ( (Tasa COP / Tasa VES) / Factor )
+                    const denominador = (tasaBaseOrigen / tasaBaseDestino) / factorAplicado;
+
+                    montoConvertido = cantidadFloat / denominador;
+                    
+                    // Tasa Neta equivalente para mostrar en los detalles
+                    tasaNetaFinal = 1.0 / denominador;
+                    
+                } else {
+                    // --- FÓRMULA ESTÁNDAR (Multiplicación por el factor) ---
+                    
+                    const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
+                    
+                    // Búsqueda del factor estándar (normal: Origen -> Destino)
+                    let factorEstandar = 1.0;
+                    if (GANANCIA_MATRIX[origenCode] && GANANCIA_MATRIX[origenCode][destinoCode]) {
+                         factorEstandar = parseFloat(GANANCIA_MATRIX[origenCode][destinoCode]);
+                    }
+                    if (isNaN(factorEstandar) || factorEstandar === 0) factorEstandar = 1.0;
+                    
+                    tasaNetaFinal = tasaCruzadaSinFactor * factorEstandar;
+
+                    montoConvertido = cantidadFloat * tasaNetaFinal;
+                }
+                // --------------------------------------------------------------------------
+
+                displayResult(montoConvertido, tasaNetaFinal, destino);
+
+            } catch (error) {
+                console.error('Error de conversión:', error);
+                errorMessage.textContent = `Error de cálculo: ${error.message}`;
+                errorMessage.classList.remove('hidden');
+            }
+        }
+        
+        // Función para el formato inteligente de decimales de la Tasa Neta
+        function formatTasaNeta(tasa) {
+            const absTasa = Math.abs(tasa);
+            
+            if (absTasa >= 1) {
+                return tasa.toFixed(2); 
+            } else if (absTasa > 0) {
+                const tasaStr = absTasa.toFixed(10); 
+                let firstSignificantIndex = -1;
+
+                for (let i = 2; i < tasaStr.length; i++) {
+                    if (tasaStr[i] !== '0' && tasaStr[i] !== '.') {
+                        firstSignificantIndex = i;
+                        break;
+                    }
+                }
+                
+                if (firstSignificantIndex !== -1) {
+                    const decimalPlaces = firstSignificantIndex - 2 + 3; 
+                    return tasa.toFixed(decimalPlaces);
+                } else {
+                    return tasa.toFixed(6);
+                }
+            } else {
+                return '0.00';
+            }
+        }
+
+        // Función para la hora y fecha localizada (usando Date.now() y zona horaria de Bogotá)
+        const formatTimestamp = () => {
+            try {
+                const date = new Date(Date.now()); 
+                return date.toLocaleDateString('es-ES', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric', 
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    timeZone: 'America/Bogota' 
+                }) + ' (Hora Colombia)';
+            } catch (e) {
+                return 'N/A';
+            }
+        };
+
+        function displayResult(montoConvertido, tasaNetaFinal, destino) {
+            const formatter = new Intl.NumberFormat('es-ES', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2
+            });
+            
+            const monto = formatter.format(montoConvertido);
+            const tasaNetaFormateada = formatTasaNeta(tasaNetaFinal);
+
+            resultadoMonto.textContent = `${destino} ${monto}`;
+            
+            detalleTasa.textContent = `ID Tasa: ${ID_TAS_DATA} ; Tasa Neta: ${tasaNetaFormateada}`;
+            detalleFecha.textContent = `Última Actualización: ${formatTimestamp()}`;
+            
+            resultadoCard.classList.remove('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndFillCurrencies();
+            
+            form.addEventListener('submit', handleConversion);
+
+            document.getElementById('cantidad').addEventListener('input', calculateConversion);
+            origenSelect.addEventListener('change', calculateConversion);
+            destinoSelect.addEventListener('change', calculateConversion);
+        });
+    </script>
+</body>
+</html>
