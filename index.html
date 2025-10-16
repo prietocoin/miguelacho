@@ -10,27 +10,28 @@
         /* Fondo del cuerpo completamente negro */
         body { 
             font-family: 'Inter', sans-serif; 
-            background-color: #000000; 
+            background-color: #000000 !important; /* ¡Importante para forzar el fondo! */
         }
-        /* Tarjeta con borde dorado */
-        .card { 
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5); /* Sombra dorada */
-            border: 2px solid #FFD700; /* Borde dorado */
-            background-color: #0d1117; /* Mantenemos el fondo oscuro */
+        /* Tarjeta con borde dorado y fondo oscuro */
+        .card-custom { 
+            /* Fondo del cuerpo lo maneja body, aquí el fondo de la tarjeta */
+            background-color: #0d1117; 
+            border: 3px solid #FFD700; /* Borde dorado */
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.7); /* Sombra dorada */
         }
         .select-line { width: 100%; } 
-        /* Logo con fondo negro */
+        /* Logo con fondo negro forzado y sombra */
         .logo-container {
             background-color: #000000; 
-            box-shadow: 0 0 10px rgba(255, 215, 0, 0.7); /* Sombra alrededor del logo */
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.7); 
         }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-    <div class="card w-full max-w-md p-6 sm:p-8 rounded-xl text-white">
+    <div class="card-custom w-full max-w-md p-6 sm:p-8 rounded-xl text-white">
         <div class="text-center mb-6">
-            <img src="./Miguelacho.jpeg" alt="Logo de Cambios Miguelacho" class="logo-container mx-auto h-20 w-20 rounded-full p-2 mb-2 object-cover">
+            <img src="./Miguelacho.jpeg" alt="Logo de Cambios Miguelacho" class="logo-container mx-auto h-[5rem] w-[5rem] rounded-full p-2 mb-2 object-cover">
             <h2 class="text-xl font-extrabold text-white">CAMBIOS MIGUELACHO</h2>
             <p class="text-sm text-yellow-500">Servicio de Divisas API</p>
         </div>
@@ -132,7 +133,6 @@
                     const sourceCode = row[""]; 
                     if (sourceCode) {
                         matrixMap[sourceCode] = row;
-                        // Buscamos IDTAS
                         if (row.IDTAS && ID_TAS_DATA === 'N/A') { 
                             ID_TAS_DATA = String(row.IDTAS);
                         }
@@ -146,10 +146,9 @@
                 let tasasObj = Array.isArray(dataTasas) ? dataTasas[0] : dataTasas;
                 if (!tasasObj) throw new Error('Tasas base vacías.');
 
-                // Buscamos IDTAS en el objeto de tasas base
                 if (tasasObj.IDTAS) { 
                     ID_TAS_DATA = String(tasasObj.IDTAS);
-                } else if (tasasObj.T003) { // Asumiendo T003 es el IDTAS del ejemplo
+                } else if (tasasObj.T003) {
                      ID_TAS_DATA = String(tasasObj.T003);
                 }
                 
@@ -269,5 +268,69 @@
             const absTasa = Math.abs(tasa);
             
             if (absTasa >= 1) {
-                return tasa.toFixed(2); // 2 decimales
+                return tasa.toFixed(2); 
             } else if (absTasa > 0) {
+                const tasaStr = absTasa.toFixed(10); 
+                let firstSignificantIndex = -1;
+
+                for (let i = 2; i < tasaStr.length; i++) {
+                    if (tasaStr[i] !== '0' && tasaStr[i] !== '.') {
+                        firstSignificantIndex = i;
+                        break;
+                    }
+                }
+                
+                if (firstSignificantIndex !== -1) {
+                    const decimalPlaces = firstSignificantIndex - 2 + 3; 
+                    return tasa.toFixed(decimalPlaces);
+                } else {
+                    return tasa.toFixed(6);
+                }
+            } else {
+                return '0.00';
+            }
+        }
+
+        // Función para la hora y fecha localizada (usando Date.now() y zona horaria de Bogotá)
+        const formatTimestamp = () => {
+            try {
+                const date = new Date(Date.now()); 
+                return date.toLocaleDateString('es-ES', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric', 
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    timeZone: 'America/Bogota' 
+                }) + ' (Hora Colombia)';
+            } catch (e) {
+                return 'N/A';
+            }
+        };
+
+        function displayResult(montoConvertido, tasaNetaFinal, destino) {
+            const formatter = new Intl.NumberFormat('es-ES', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2
+            });
+            
+            const monto = formatter.format(montoConvertido);
+            const tasaNetaFormateada = formatTasaNeta(tasaNetaFinal);
+
+            resultadoMonto.textContent = `${destino} ${monto}`;
+            
+            detalleTasa.textContent = `ID Tasa: ${ID_TAS_DATA} ; Tasa Neta: ${tasaNetaFormateada}`;
+            detalleFecha.textContent = `Última Actualización: ${formatTimestamp()}`;
+            
+            resultadoCard.classList.remove('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndFillCurrencies();
+            
+            form.addEventListener('submit', handleConversion);
+
+            document.getElementById('cantidad').addEventListener('input', calculateConversion);
+            origenSelect.addEventListener('change', calculateConversion);
+            destinoSelect.addEventListener('change', calculateConversion);
+        });
+    </script>
+</body>
+</html>
