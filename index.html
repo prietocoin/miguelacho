@@ -10,11 +10,10 @@
         /* Fondo del cuerpo completamente negro */
         body { 
             font-family: 'Inter', sans-serif; 
-            background-color: #000000 !important; /* ¡Importante para forzar el fondo! */
+            background-color: #000000 !important; 
         }
         /* Tarjeta con borde dorado y fondo oscuro */
         .card-custom { 
-            /* Fondo del cuerpo lo maneja body, aquí el fondo de la tarjeta */
             background-color: #0d1117; 
             border: 3px solid #FFD700; /* Borde dorado */
             box-shadow: 0 0 20px rgba(255, 215, 0, 0.7); /* Sombra dorada */
@@ -215,8 +214,8 @@
             if (!cantidad || !origen || !destino || !Object.keys(TASAS_BASE).length) {
                 if (Object.keys(TASAS_BASE).length) {
                     errorMessage.textContent = 'Faltan campos por completar.';
-                    errorMessage.classList.remove('hidden');
                 }
+                errorMessage.classList.remove('hidden');
                 return;
             }
 
@@ -237,22 +236,38 @@
                      throw new Error(`Tasas base para ${origen} o ${destino} no encontradas o inválidas.`);
                 }
                 
-                // 1. TASA CRUZADA (Directa): Destino / Origen
-                const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
-                
-                // 2. OBTENER FACTOR DE GANANCIA (Buscando inversamente: B->A)
+                // 1. OBTENER FACTOR DE GANANCIA (Buscando inversamente: B->A)
                 let factorAplicado = 1.0; 
-                
-                // Buscamos el factor de A -> B en la celda B -> A de la matriz de ganancia
                 if (GANANCIA_MATRIX[destinoCode] && GANANCIA_MATRIX[destinoCode][origenCode]) {
                     factorAplicado = parseFloat(GANANCIA_MATRIX[destinoCode][origenCode]);
                 } 
                 if (isNaN(factorAplicado) || factorAplicado === 0) factorAplicado = 1.0;
                 
-                // 3. CALCULAR TASA NETA FINAL: Tasa Cruzada * Factor (ya corregido en la búsqueda)
-                const tasaNetaFinal = tasaCruzadaSinFactor * factorAplicado;
+                let tasaNetaFinal;
+                let montoConvertido;
 
-                const montoConvertido = cantidadFloat * tasaNetaFinal;
+                // --- EXCEPCIÓN SOLICITADA: COP a VES (CADENA DE DIVISIONES) ---
+                if (origen === 'COP' && destino === 'VES') {
+                    
+                    if (tasaBaseDestino === 0 || factorAplicado === 0) {
+                        throw new Error("División por cero. La Tasa Base VES o el Factor Ganancia es cero.");
+                    }
+
+                    // MONTO CONVERTIDO: Cantidad / VES / Factor
+                    montoConvertido = (cantidadFloat / tasaBaseDestino) / factorAplicado;
+                    
+                    // Calculamos la Tasa Neta equivalente para mostrar en los detalles
+                    tasaNetaFinal = 1.0 / tasaBaseDestino / factorAplicado;
+                    
+                } else {
+                    // --- FÓRMULA ESTÁNDAR (Multiplicación por el factor) ---
+                    
+                    const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
+                    tasaNetaFinal = tasaCruzadaSinFactor * factorAplicado;
+
+                    montoConvertido = cantidadFloat * tasaNetaFinal;
+                }
+                // --------------------------------------------------------------------------
 
                 displayResult(montoConvertido, tasaNetaFinal, destino);
 
