@@ -74,10 +74,24 @@
         const ALLOWED_CURRENCIES = ['COP', 'BRL', 'PEN', 'CLP', 'USD', 'MXN', 'ECU', 'EUR', 'VES', 'ARS'];
         const CURRENCY_MAP = { 'ECU': 'USD' };
 
+        // 1. Mapeo de nombres para mostrar en el resultado (corregido)
+        const CURRENCY_NAMES = {
+            'COP': 'Peso Colombiano',
+            'BRL': 'Real Brasileño',
+            'PEN': 'Sol Peruano',
+            'CLP': 'Peso Chileno',
+            'USD': 'Dólar Estadounidense',
+            'MXN': 'Peso Mexicano',
+            'ECU': 'Dólar Ecuatoriano',
+            'EUR': 'Euro',
+            'VES': 'Bolívar Soberano',
+            'ARS': 'Peso Argentino'
+        };
+
         // Almacenamiento local de los datos
         let TASAS_BASE = {}; 
         let GANANCIA_MATRIX = {}; 
-        let TIMESTAMP_DATA = 'N/A'; // Para almacenar la fecha o timestamp
+        let TIMESTAMP_DATA = 'N/A'; 
         
         // Elementos DOM 
         const origenSelect = document.getElementById('origen');
@@ -128,13 +142,12 @@
                 }
                 
                 for (const key in tasasObj) {
-                    // Ignoramos el campo de fecha si existe y parseamos el resto
                     if (key !== 'timestamp' && key !== 'fecha' && key !== 'actualizacion') {
                         TASAS_BASE[key] = parseFloat(tasasObj[key]);
                     }
                 }
 
-                // 4. Llenar Selectores (usamos las claves de las tasas base)
+                // 4. Llenar Selectores 
                 const API_MONEDAS_DISPONIBLES = Object.keys(TASAS_BASE);
                 
                 const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
@@ -148,7 +161,8 @@
                 destinoSelect.innerHTML = '';
                 
                 finalMonedas.forEach(moneda => {
-                    const displayText = moneda === 'ECU' ? 'ECU (Dólar Ecuatoriano)' : `${moneda}`;
+                    // Usamos el código de moneda y el nombre completo en el selector
+                    const displayText = `${moneda} (${CURRENCY_NAMES[moneda]})`;
                     const optionOrigen = new Option(displayText, moneda);
                     const optionDestino = new Option(displayText, moneda);
                     origenSelect.add(optionOrigen);
@@ -204,12 +218,11 @@
                 const cantidadFloat = parseFloat(cantidad);
 
                 if (origenCode === destinoCode) {
-                    // En la conversión 1:1, la tasa neta final es 1
                     displayResult(cantidadFloat, 1, destino); 
                     return;
                 }
                 
-                // 1. OBTENER TASAS BASE (ej. USD: 1, COP: 3890)
+                // 1. OBTENER TASAS BASE 
                 const tasaBaseOrigen = TASAS_BASE[origenCode];
                 const tasaBaseDestino = TASAS_BASE[destinoCode];
 
@@ -217,7 +230,7 @@
                      throw new Error(`Tasas base para ${origen} o ${destino} no encontradas o inválidas.`);
                 }
                 
-                // 2. OBTENER FACTOR DE GANANCIA (ej. 0.88)
+                // 2. OBTENER FACTOR DE GANANCIA
                 let factorGanancia = 1.0; 
                 if (GANANCIA_MATRIX[origenCode] && GANANCIA_MATRIX[origenCode][destinoCode]) {
                     factorGanancia = parseFloat(GANANCIA_MATRIX[origenCode][destinoCode]);
@@ -231,7 +244,6 @@
                 // 4. CÁLCULO FINAL: Cantidad * Tasa Neta Final
                 const montoConvertido = cantidadFloat * tasaNetaFinal;
 
-                // Para los detalles, pasamos la Tasa Neta Final
                 displayResult(montoConvertido, tasaNetaFinal, destino);
 
             } catch (error) {
@@ -241,42 +253,76 @@
             }
         }
         
+        // Función para el nuevo formato inteligente de decimales
+        function formatTasaNeta(tasa) {
+            if (tasa >= 1 || tasa === 0) {
+                // Si es mayor o igual a 1, mostrar 6 decimales fijos (o 2 si lo prefieres)
+                return tasa.toFixed(6); 
+            } else {
+                // Si es menor a 1 (ej. 0.00017055)
+                const tasaStr = tasa.toFixed(10); // Aseguramos alta precisión para encontrar la primera cifra
+                let firstDigitIndex = 0;
+
+                // Encontrar la primera cifra distinta de cero después del punto
+                for (let i = 2; i < tasaStr.length; i++) {
+                    if (tasaStr[i] !== '0' && tasaStr[i] !== '.') {
+                        firstDigitIndex = i;
+                        break;
+                    }
+                }
+                
+                // Mostrar 3 cifras significativas (desde la primera cifra distinta de cero)
+                // Posición total de decimales a mostrar (índice - 2 + 3)
+                const decimalPlaces = firstDigitIndex - 2 + 3; 
+
+                // Usamos toPrecision(3) para las cifras significativas si la Tasa es muy pequeña, 
+                // pero lo ajustamos para que funcione con toFixed (índice + 3)
+                return tasa.toFixed(decimalPlaces);
+            }
+        }
+
         function displayResult(montoConvertido, tasaNetaFinal, destino) {
             const formatter = new Intl.NumberFormat('es-ES', { 
                 minimumFractionDigits: 2, 
                 maximumFractionDigits: 2
             });
             
-            // Función para formatear el timestamp
-            const formatTimestamp = (timestamp) => {
-                if (!timestamp || timestamp === 'N/A') return 'N/A';
-                
-                let date;
-                if (typeof timestamp === 'number' || (typeof timestamp === 'string' && !isNaN(Date.parse(timestamp)))) {
-                    // Intenta crear la fecha desde un número (timestamp) o string de fecha
-                    date = new Date(timestamp * 1000); // Asume segundos (común en Unix)
-                    if (isNaN(date.getTime())) {
-                        date = new Date(timestamp); // Intenta el string sin multiplicar
-                    }
-                } else {
-                    return timestamp; // Devuelve el string si no es un formato de fecha reconocido
-                }
-
-                if (isNaN(date.getTime())) return 'N/A';
-
-                return date.toLocaleDateString('es-ES', { 
-                    day: '2-digit', month: '2-digit', year: 'numeric', 
-                    hour: '2-digit', minute: '2-digit', second: '2-digit' 
-                });
-            };
-
             const monto = formatter.format(montoConvertido);
             
+            // 1. Mostrar nombre de la moneda + código
+            const monedaDestinoDisplay = `${destino} (${CURRENCY_NAMES[destino]})`;
+            
+            // 2. Formato decimal inteligente para la Tasa Neta
+            const tasaNetaFormateada = formatTasaNeta(tasaNetaFinal);
+
+            const formatTimestamp = (timestamp) => {
+                if (!timestamp || timestamp === 'N/A') return 'N/A';
+                try {
+                    // Intenta parsear el timestamp asumiendo milisegundos si es un número grande, o segundos
+                    let date;
+                    if (typeof timestamp === 'number' && timestamp > 10000000000) {
+                        date = new Date(timestamp); // Milisegundos
+                    } else if (typeof timestamp === 'number') {
+                        date = new Date(timestamp * 1000); // Segundos
+                    } else {
+                        date = new Date(timestamp); // String
+                    }
+
+                    if (isNaN(date.getTime())) return String(timestamp); 
+
+                    return date.toLocaleDateString('es-ES', { 
+                        day: '2-digit', month: '2-digit', year: 'numeric', 
+                        hour: '2-digit', minute: '2-digit', second: '2-digit' 
+                    });
+                } catch (e) {
+                    return String(timestamp);
+                }
+            };
+
             resultadoMonto.textContent = `${destino} ${monto}`;
             
             // Tasa Neta: Valor de la tasa de conversión final
-            // Última Actualización: Muestra el timestamp procesado
-            detalleTasa.innerHTML = `Tasa Neta: ${tasaNetaFinal.toFixed(6)} ; Última Actualización: ${formatTimestamp(TIMESTAMP_DATA)}`;
+            detalleTasa.innerHTML = `Tasa Neta: ${tasaNetaFormateada} ; Última Actualización: ${formatTimestamp(TIMESTAMP_DATA)}`;
             
             resultadoCard.classList.remove('hidden');
         }
@@ -286,7 +332,6 @@
             
             form.addEventListener('submit', handleConversion);
 
-            // Escucha cambios para calcular automáticamente
             document.getElementById('cantidad').addEventListener('input', calculateConversion);
             origenSelect.addEventListener('change', calculateConversion);
             destinoSelect.addEventListener('change', calculateConversion);
