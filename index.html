@@ -81,7 +81,7 @@
         // Almacenamiento local de la Matriz de Tasas
         let CURRENCY_MATRIX = {}; 
         
-        // Elementos DOM (Asegura la referencia a todos los IDs)
+        // Elementos DOM 
         const origenSelect = document.getElementById('origen');
         const destinoSelect = document.getElementById('destino');
         const form = document.getElementById('conversion-form');
@@ -105,7 +105,7 @@
 
                 const matrixMap = {};
                 data.forEach(row => {
-                    // CORRECCIÓN FINAL: Usamos la clave vacía ("") para obtener el código de moneda de la fila
+                    // CORRECCIÓN: Usamos la clave vacía ("") para obtener el código de moneda de la fila
                     const sourceCode = row[""]; 
                     if (sourceCode) {
                         matrixMap[sourceCode] = row;
@@ -201,7 +201,7 @@
 
                 tasa = parseFloat(tasa);
 
-                // FÓRMULA FINAL: MULTIPLICACIÓN
+                // FÓRMULA FINAL: MULTIPLICACIÓN (La tasa de la matriz ya incluye el factor de ganancia)
                 const montoConvertido = cantidadFloat * tasa;
 
                 displayResult(montoConvertido, tasa, destino);
