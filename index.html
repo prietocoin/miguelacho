@@ -58,7 +58,7 @@
             <div id="resultado-card" class="bg-gray-700 p-4 rounded-lg text-center hidden">
                 <p id="resultado-monto" class="text-3xl font-extrabold text-green-400">0.00 COP</p>
                 <div class="text-sm text-gray-400 mt-2">
-                    <p id="detalle-tasa">Tasa Utilizada: N/A ; ID Moneda Origen: N/A</p>
+                    <p id="detalle-tasa">Tasa Utilizada: N/A ; Factor de Ganancia: N/A</p>
                 </div>
             </div>
             <p id="error-message" class="text-sm text-red-500 text-center mt-3 hidden">Error al realizar la conversión.</p>
@@ -105,11 +105,11 @@
                 if (!data || data.length === 0) throw new Error('Matriz vacía.');
 
                 // 2. Convertir el array de filas de la API en un mapa de objeto para una fácil consulta: 
-                // { 'USD': { 'COP': 3800, ... }, 'COP': {...} }
+                // { 'USD': { '': 'USD', 'COP': 0.88, ... } }
                 const matrixMap = {};
                 data.forEach(row => {
-                    // ASUNCIÓN: 'Columna0' contiene el código de la moneda de origen (fila)
-                    const sourceCode = row['Columna0']; 
+                    // *** CORRECCIÓN CLAVE: Usamos la clave vacía ("") para obtener el código de moneda de la fila ***
+                    const sourceCode = row[""]; 
                     if (sourceCode) {
                         matrixMap[sourceCode] = row;
                     }
@@ -117,15 +117,14 @@
 
                 CURRENCY_MATRIX = matrixMap;
 
-                // 3. Filtrar y combinar la lista de monedas
-                const API_MONEDAS_IN_ROWS = Object.keys(CURRENCY_MATRIX);
+                // 3. Obtener la lista de monedas disponibles que deseamos mostrar
+                const API_MONEDAS_DISPONIBLES = Object.keys(CURRENCY_MATRIX);
                 
-                // Filtramos la lista deseada por el usuario contra las monedas disponibles en las filas de la matriz
+                // Filtramos la lista deseada por el usuario contra las monedas disponibles en la API
                 const finalMonedas = ALLOWED_CURRENCIES.filter(moneda => {
-                    // Si es una moneda estándar, debe estar en las filas de la matriz O en el mapeo (USD)
                     const lookupCode = CURRENCY_MAP[moneda] || moneda;
-                    if (API_MONEDAS_IN_ROWS.includes(lookupCode)) return true;
-                    return false;
+                    // Verificamos si la moneda está en las filas de la matriz
+                    return API_MONEDAS_DISPONIBLES.includes(lookupCode);
                 });
                 
                 if (finalMonedas.length === 0) throw new Error('No se encontraron códigos de moneda válidos en la matriz.');
@@ -135,7 +134,6 @@
                 destinoSelect.innerHTML = '';
                 
                 finalMonedas.forEach(moneda => {
-                    // Mostrar "ECU" como "ECU (Dólar Ecuatoriano)"
                     const displayText = moneda === 'ECU' ? 'ECU (Dólar Ecuatoriano)' : `${moneda}`;
                     const optionOrigen = new Option(displayText, moneda);
                     const optionDestino = new Option(displayText, moneda);
@@ -144,8 +142,8 @@
                 });
 
                 // 5. Establecer valores por defecto e iniciar cálculo
-                origenSelect.value = 'USD'; // Usamos USD como origen por defecto
-                destinoSelect.value = 'COP'; // Usamos COP como destino por defecto
+                origenSelect.value = 'USD'; 
+                destinoSelect.value = 'COP'; 
                 calculateConversion(new Event('submit')); 
                 
             } catch (error) {
@@ -188,7 +186,7 @@
             }
 
             try {
-                // 1. Determinar el código real para la consulta en la matriz (mapea ECU a USD)
+                // 1. Determinar el código real para la consulta en la matriz (mapea ECU a USD si es necesario)
                 const origenCode = CURRENCY_MAP[origen] || origen;
                 const destinoCode = CURRENCY_MAP[destino] || destino;
 
@@ -196,7 +194,7 @@
 
                 if (origenCode === destinoCode) {
                     // Conversión a sí misma es 1:1
-                    displayResult(cantidadFloat, 1, origenCode, destino);
+                    displayResult(cantidadFloat, 1, destino);
                     return;
                 }
 
@@ -204,10 +202,10 @@
                 const origenRow = CURRENCY_MATRIX[origenCode];
 
                 if (!origenRow) {
-                    throw new Error(`Fila de tasa para ${origenCode} no encontrada.`);
+                    throw new Error(`Fila de tasa para ${origenCode} no encontrada en la matriz.`);
                 }
                 
-                // ASUNCIÓN: La tasa es el valor en la columna de la moneda de destino
+                // La tasa de conversión es el valor en la columna de la moneda de destino
                 let tasa = origenRow[destinoCode]; 
 
                 if (tasa === undefined || tasa === null || isNaN(parseFloat(tasa))) {
@@ -217,10 +215,10 @@
                 tasa = parseFloat(tasa);
 
                 // 3. Realizar el cálculo local
-                const montoConvertido = cantidadFloat * tasa;
+                const montoConvertido = cantidadFloat / tasa; // ASUNCION DE FORMULA: Dividimos por el factor de ganancia.
 
                 // 4. Mostrar el resultado
-                displayResult(montoConvertido, tasa, origenRow['Columna1'], destino);
+                displayResult(montoConvertido, tasa, destino);
 
             } catch (error) {
                 console.error('Error de conversión:', error);
@@ -230,8 +228,8 @@
         }
         
         // Función para mostrar el resultado y detalles
-        function displayResult(montoConvertido, tasa, idTasa, destino) {
-            // Formato de número con separador decimal ',' (usando la preferencia del usuario ';')
+        function displayResult(montoConvertido, tasa, destino) {
+            // Formato de número con separador decimal ','
             const formatter = new Intl.NumberFormat('es-ES', { 
                 minimumFractionDigits: 2, 
                 maximumFractionDigits: 4 
@@ -240,11 +238,11 @@
             const monto = formatter.format(montoConvertido);
             const monedaDestinoDisplay = destino;
             
-            // Usamos la tasa encontrada y un identificador genérico de la fila
-            resultadoMonto.textContent = `${monedaDestinoDisplay} ${monto}`;
-            
             // Usamos el separador de elementos ';' solicitado por el usuario
-            detalleTasa.innerHTML = `Tasa Utilizada: ${tasa.toFixed(6)} ; ID Moneda Origen (Columna1): ${idTasa || 'N/A'}`;
+            // Nota: Aquí asumimos que el valor de la matriz es el 'Factor de Ganancia' 
+            // y que la operación es DIVISIÓN (cantidad / factor_ganancia)
+            resultadoMonto.textContent = `${monedaDestinoDisplay} ${monto}`;
+            detalleTasa.innerHTML = `Factor de Ganancia: ${tasa.toFixed(6)} ; Tasa: ${tasa.toFixed(6)}`;
             
             resultadoCard.classList.remove('hidden');
         }
@@ -261,4 +259,3 @@
     </script>
 </body>
 </html>
-
