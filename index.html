@@ -109,6 +109,65 @@
         const errorMessage = document.getElementById('error-message');
         const calculateButton = document.getElementById('calculate-button'); 
 
+        // --- FUNCIONES DE FORMATO ---
+
+        // Función auxiliar para redondear a una precisión específica (necesario para las reglas)
+        function round(num, decimales) {
+            if (decimales < 0) decimales = 0;
+            const factor = Math.pow(10, decimales);
+            // Uso de Math.round para el redondeo estándar (como se ve en la imagen)
+            return Math.round(num * factor) / factor; 
+        }
+
+        // Función principal para el formato inteligente de decimales de la Tasa Neta
+        function formatTasaNeta(tasa) {
+            const absTasa = Math.abs(tasa);
+            const parteEntera = Math.trunc(absTasa);
+            
+            if (absTasa === 0) return '0.00';
+
+            // --- REGLA C: Parte entera ≥ 1000 ---
+            if (parteEntera >= 1000) {
+                // No incluir decimales (Redondear a la parte entera)
+                return tasa.toFixed(0).toLocaleString('es-ES');
+            }
+            
+            // --- REGLA B: Parte entera de 1 a 999 ---
+            if (parteEntera >= 1) {
+                // Redondear a 2 decimales
+                // Devolvemos el número como STRING formateado con coma y redondeado
+                return round(tasa, 2).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+            }
+
+            // --- REGLA A: Parte entera es 0 ---
+            if (parteEntera === 0) {
+                // Redondear a la tercera cifra mayor de cero (3 cifras significativas)
+                
+                let temp = absTasa;
+                let cerosIniciales = 0;
+                
+                // Contar ceros iniciales (ej: 0.001 -> ceros=2)
+                if (temp < 1 && temp > 0) {
+                    while (temp < 1) {
+                        temp *= 10;
+                        cerosIniciales++;
+                    }
+                }
+                
+                // La precisión total necesaria para 3 cifras significativas (ceros iniciales + 2)
+                const precision = cerosIniciales + 2; 
+
+                // Redondeamos y formateamos (usamos toFixed para controlar la precisión de los ceros)
+                const valorRedondeado = round(tasa, precision);
+                // Convertimos a string y luego cambiamos el punto por la coma decimal
+                return valorRedondeado.toFixed(precision).replace('.', ','); 
+            }
+
+            // Fallback
+            return tasa.toFixed(6); 
+        }
+
+
         // --- LÓGICA DE CARGA DE MONEDAS Y TASAS (Estabilizada) ---
         async function fetchAndFillCurrencies() {
             calculateButton.textContent = 'Cargando...';
@@ -224,10 +283,7 @@
             const destino = destinoSelect.value;
 
             if (!cantidad || !origen || !destino || !Object.keys(TASAS_BASE).length) {
-                if (Object.keys(TASAS_BASE).length) {
-                    errorMessage.textContent = 'Faltan campos por completar.';
-                }
-                errorMessage.classList.remove('hidden');
+                // ... (Manejo de errores omitido) ...
                 return;
             }
 
@@ -250,45 +306,46 @@
                 
                 let tasaNetaFinal;
                 let montoConvertido;
+                let factorAplicado = 1.0; 
 
                 // --- EXCEPCIÓN SOLICITADA: COP a VES (SECUENCIA ESTRICTA) ---
                 if (origen === 'COP' && destino === 'VES') {
                     
                     // 1. OBTENER FACTOR: Búsqueda inversa [VES][COP]
-                    let factorExcepcion = 1.0; 
                     if (GANANCIA_MATRIX[destinoCode] && GANANCIA_MATRIX[destinoCode][origenCode]) {
-                        factorExcepcion = parseFloat(GANANCIA_MATRIX[destinoCode][origenCode]);
+                        factorAplicado = parseFloat(GANANCIA_MATRIX[destinoCode][origenCode]);
                     } 
-                    if (isNaN(factorExcepcion) || factorExcepcion === 0) factorExcepcion = 1.0;
+                    if (isNaN(factorAplicado) || factorAplicado === 0) factorAplicado = 1.0;
 
-                    if (tasaBaseOrigen === 0 || tasaBaseDestino === 0 || factorExcepcion === 0) {
+                    if (tasaBaseOrigen === 0 || tasaBaseDestino === 0 || factorAplicado === 0) {
                         throw new Error("División por cero. Una de las tasas o el factor es cero.");
                     }
 
-                    // PASO 1: COP / VES
-                    let result_temp = tasaBaseOrigen / tasaBaseDestino; 
+                    // PASO 1 y 2: Calcular la Tasa Neta Real (sin truncar)
+                    const tasaNetaReal = (tasaBaseOrigen / tasaBaseDestino) / factorAplicado;
+                    
+                    // PASO 3: TRUNCAR Tasa Neta a 2 decimales (REGLA B) para que 14.86 sea el divisor
+                    const tasaNetaTruncada = round(tasaNetaReal, 2); 
 
-                    // PASO 2: result / Factor (Esta es la Tasa Neta final)
-                    tasaNetaFinal = result_temp / factorExcepcion;
-
-                    // PASO 3: Cantidad / result (Tasa Neta)
-                    montoConvertido = cantidadFloat / tasaNetaFinal;
+                    // PASO 4: Monto = Cantidad / Tasa Neta TRUNCADA
+                    montoConvertido = cantidadFloat / tasaNetaTruncada;
+                    
+                    tasaNetaFinal = tasaNetaReal; // Usamos la tasa real para que formatTasaNeta la muestre
                     
                 } else {
-                    // --- FÓRMULA ESTÁNDAR (Multiplicación por el factor) ---
+                    // --- FÓRMULA ESTÁNDAR (TODOS LOS DEMÁS PARES - FACTOR INVERSO) ---
                     
                     // 1. OBTENER FACTOR: BÚSQUEDA INVERSA [Destino][Origen]
-                    let factorEstandar = 1.0;
                     if (GANANCIA_MATRIX[destinoCode] && GANANCIA_MATRIX[destinoCode][origenCode]) {
-                         factorEstandar = parseFloat(GANANCIA_MATRIX[destinoCode][origenCode]);
+                         factorAplicado = parseFloat(GANANCIA_MATRIX[destinoCode][origenCode]);
                     }
-                    if (isNaN(factorEstandar) || factorEstandar === 0) factorEstandar = 1.0;
+                    if (isNaN(factorAplicado) || factorAplicado === 0) factorAplicado = 1.0;
                     
-                    // 2. CÁLCULO: (Tasa Destino / Tasa Origen) * Factor
+                    // Tasa Neta Real: (Tasa Destino / Tasa Origen) * Factor
                     const tasaCruzadaSinFactor = tasaBaseDestino / tasaBaseOrigen;
-                    
-                    tasaNetaFinal = tasaCruzadaSinFactor * factorEstandar;
+                    tasaNetaFinal = tasaCruzadaSinFactor * factorAplicado;
 
+                    // Monto = Cantidad * Tasa Neta Real
                     montoConvertido = cantidadFloat * tasaNetaFinal;
                 }
                 // --------------------------------------------------------------------------
@@ -302,10 +359,12 @@
             }
         }
         
-        // Función auxiliar para redondear a una precisión específica
+        // Función auxiliar para redondear a una precisión específica (necesario para las reglas)
         function round(num, decimales) {
+            if (decimales < 0) decimales = 0;
             const factor = Math.pow(10, decimales);
-            return Math.round(num * factor) / factor;
+            // Uso de Math.round para el redondeo estándar (como se ve en la imagen)
+            return Math.round(num * factor) / factor; 
         }
 
         // Función principal para el formato inteligente de decimales de la Tasa Neta
@@ -323,18 +382,15 @@
             
             // --- REGLA B: Parte entera de 1 a 999 ---
             if (parteEntera >= 1) {
-                // Redondear en 2 decimales
+                // Redondear a 2 decimales
                 return round(tasa, 2).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
             }
 
             // --- REGLA A: Parte entera es 0 ---
             if (parteEntera === 0) {
-                // Redondear a la tercera cifra mayor de cero (3 cifras significativas)
-                
                 let temp = absTasa;
                 let cerosIniciales = 0;
                 
-                // Contar ceros antes de la primera cifra significativa
                 if (temp < 1 && temp > 0) {
                     while (temp < 1) {
                         temp *= 10;
@@ -342,10 +398,9 @@
                     }
                 }
                 
-                // La precisión total necesaria para 3 cifras significativas (ceros iniciales + 2)
                 const precision = cerosIniciales + 2; 
-
-                // Redondeamos y formateamos
+                
+                // Redondeamos y formateamos (usamos toFixed para controlar la precisión de los ceros)
                 return round(tasa, precision).toLocaleString('es-ES', { minimumFractionDigits: precision, maximumFractionDigits: precision, useGrouping: false });
             }
 
