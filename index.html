@@ -43,7 +43,7 @@
             <div class="flex items-end space-x-4 mb-4">
                 <div class="flex-grow">
                     <label for="cantidad" class="block text-sm font-medium text-gray-400 mb-1">Cantidad a Convertir:</label>
-                    <input type="number" id="cantidad" value="100" min="0.01" step="0.01" required
+                    <input type="number" id="cantidad" value="100000" min="0.01" step="0.01" required
                             class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white">
                 </div>
                 <button type="submit" id="calculate-button"
@@ -251,7 +251,7 @@
                 let tasaNetaFinal;
                 let montoConvertido;
 
-                // --- EXCEPCIÓN SOLICITADA: COP a VES (DIVISIÓN TRIPLE) ---
+                // --- EXCEPCIÓN SOLICITADA: COP a VES (SECUENCIA ESTRICTA) ---
                 if (origen === 'COP' && destino === 'VES') {
                     
                     // 1. OBTENER FACTOR: Búsqueda inversa [VES][COP]
@@ -265,14 +265,17 @@
                         throw new Error("División por cero. Una de las tasas o el factor es cero.");
                     }
 
-                    // PASO 1 y 2 (Tasa Neta): (Tasa COP / Tasa VES) / Factor
-                    tasaNetaFinal = (tasaBaseOrigen / tasaBaseDestino) / factorExcepcion;
+                    // PASO 1: COP / VES
+                    let result_temp = tasaBaseOrigen / tasaBaseDestino; 
 
-                    // PASO 3: Monto = Cantidad / Tasa Neta
+                    // PASO 2: result / Factor (Esta es la Tasa Neta final)
+                    tasaNetaFinal = result_temp / factorExcepcion;
+
+                    // PASO 3: Cantidad / result (Tasa Neta)
                     montoConvertido = cantidadFloat / tasaNetaFinal;
                     
                 } else {
-                    // --- FÓRMULA ESTÁNDAR (TODOS LOS DEMÁS PARES - FACTOR INVERSO) ---
+                    // --- FÓRMULA ESTÁNDAR (Multiplicación por el factor) ---
                     
                     // 1. OBTENER FACTOR: BÚSQUEDA INVERSA [Destino][Origen]
                     let factorEstandar = 1.0;
@@ -299,32 +302,55 @@
             }
         }
         
-        // Función para el formato inteligente de decimales de la Tasa Neta
+        // Función auxiliar para redondear a una precisión específica
+        function round(num, decimales) {
+            const factor = Math.pow(10, decimales);
+            return Math.round(num * factor) / factor;
+        }
+
+        // Función principal para el formato inteligente de decimales de la Tasa Neta
         function formatTasaNeta(tasa) {
             const absTasa = Math.abs(tasa);
+            const parteEntera = Math.trunc(absTasa);
             
-            if (absTasa >= 1) {
-                return tasa.toFixed(2); 
-            } else if (absTasa > 0) {
-                const tasaStr = absTasa.toFixed(10); 
-                let firstSignificantIndex = -1;
+            if (absTasa === 0) return '0.00';
 
-                for (let i = 2; i < tasaStr.length; i++) {
-                    if (tasaStr[i] !== '0' && tasaStr[i] !== '.') {
-                        firstSignificantIndex = i;
-                        break;
+            // --- REGLA C: Parte entera ≥ 1000 ---
+            if (parteEntera >= 1000) {
+                // No incluir decimales (Redondear a la parte entera)
+                return tasa.toFixed(0).toLocaleString('es-ES');
+            }
+            
+            // --- REGLA B: Parte entera de 1 a 999 ---
+            if (parteEntera >= 1) {
+                // Redondear en 2 decimales
+                return round(tasa, 2).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
+            }
+
+            // --- REGLA A: Parte entera es 0 ---
+            if (parteEntera === 0) {
+                // Redondear a la tercera cifra mayor de cero (3 cifras significativas)
+                
+                let temp = absTasa;
+                let cerosIniciales = 0;
+                
+                // Contar ceros antes de la primera cifra significativa
+                if (temp < 1 && temp > 0) {
+                    while (temp < 1) {
+                        temp *= 10;
+                        cerosIniciales++;
                     }
                 }
                 
-                if (firstSignificantIndex !== -1) {
-                    const decimalPlaces = firstSignificantIndex - 2 + 3; 
-                    return tasa.toFixed(decimalPlaces);
-                } else {
-                    return tasa.toFixed(6);
-                }
-            } else {
-                return '0.00';
+                // La precisión total necesaria para 3 cifras significativas (ceros iniciales + 2)
+                const precision = cerosIniciales + 2; 
+
+                // Redondeamos y formateamos
+                return round(tasa, precision).toLocaleString('es-ES', { minimumFractionDigits: precision, maximumFractionDigits: precision, useGrouping: false });
             }
+
+            // Fallback
+            return tasa.toFixed(6); 
         }
 
         // Función para la hora y fecha localizada (usando Date.now() y zona horaria de Bogotá)
