@@ -36,7 +36,9 @@ function transformTasasToObjects(data) {
 // --- FUNCIÓN PRINCIPAL DE GOOGLE SHEETS ---
 async function getSheetData(sheetName, range, raw = false) {
     const auth = new google.auth.GoogleAuth({
-        keyFile: CREDENTIALS_PATH,
+        // Nota: La advertencia 'keyFileNam' que viste anteriormente se soluciona usando 'keyFile'
+        // Esto está correcto, pero si persisten las advertencias, investiga el uso de 'credentials' en lugar de 'keyFile'
+        keyFile: CREDENTIALS_PATH, 
         scopes: 'https://www.googleapis.com/auth/spreadsheets.readonly',
     });
 
@@ -65,8 +67,8 @@ app.use((req, res, next) => {
 
 // Ruta raíz para el chequeo de salud de EasyPanel
 app.get('/', (req, res) => {
-    // ¡ESTA ES LA LÍNEA NUEVA!
-    console.log(`[${new Date().toISOString()}] ¡Chequeo de salud recibido! Respondiendo con 'ok'.`);
+    // Esta línea ayuda a verificar que el servidor está respondiendo al health check
+    console.log(`[${new Date().toISOString()}] ¡Chequeo de salud recibido! Respondiendo con 'ok'.`); 
     res.status(200).json({ status: 'ok', message: 'API de Miguelacho en línea' });
 });
 
@@ -126,10 +128,11 @@ app.get('/convertir', async (req, res) => {
     }
 });
 
-// --- INICIO DEL SERVIDOR ---
+// --- INICIO DEL SERVIDOR Y MANEJO DE SEÑALES ---
 async function startServer() {
     try {
         console.log('Cargando matriz de ganancias desde Google Sheets (hoja: miguelacho)...');
+        // Aquí se asegura que la carga de la matriz se complete antes de lanzar el servidor
         MATRIZ_DE_GANANCIAS = await getSheetData(GANANCIAS_SHEET_NAME, GANANCIAS_SHEET_RANGE, true);
         if (MATRIZ_DE_GANANCIAS && MATRIZ_DE_GANANCIAS.length > 0) {
             console.log('¡Matriz de ganancias cargada exitosamente!');
@@ -138,12 +141,32 @@ async function startServer() {
         }
     } catch (error) {
         console.error('ERROR CRÍTICO: No se pudo cargar la matriz de ganancias.', error);
+        // Si hay un error crítico aquí, el proceso continuará, pero las peticiones fallarán con 503
     }
     
-    app.listen(PORT, () => {
+    // Capturamos la instancia del servidor para poder cerrarla luego
+    const server = app.listen(PORT, () => {
         console.log(`Servidor para Miguelacho API escuchando en el puerto: ${PORT}`);
+    });
+
+    // --- MANEJADOR DE APAGADO ELEGANTE (GRACEFUL SHUTDOWN) ---
+    // Esto resuelve el problema de que el proceso sea terminado abruptamente
+    process.on('SIGTERM', () => {
+        console.log('[SHUTDOWN] Señal SIGTERM recibida. Iniciando cierre elegante...');
+        
+        // 1. Detener el servidor para que no acepte nuevas conexiones
+        server.close(async () => {
+            console.log('[SHUTDOWN] Servidor HTTP cerrado. Terminando proceso.');
+            // 2. Salir del proceso con código de éxito (0)
+            process.exit(0);
+        });
+
+        // 3. Configurar un timeout de seguridad
+        setTimeout(() => {
+            console.error('[SHUTDOWN] El cierre elegante tardó demasiado (10s). Forzando salida.');
+            process.exit(1); 
+        }, 10000); // 10 segundos de gracia
     });
 }
 
 startServer();
-
